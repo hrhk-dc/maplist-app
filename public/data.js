@@ -1,5 +1,5 @@
 /*
- * 訪問リストアプリ：データの受け口（VLA_DATA）
+ * maplist-app：データの受け口（VLA_DATA）
  *
  * 画面（app.js）はこの VLA_DATA の関数だけを呼ぶ。
  *  - 店舗検索・住所の座標変換：サーバー（/api/search・/api/geocode）が Google Places を使う。

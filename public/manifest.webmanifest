@@ -1,6 +1,6 @@
 {
-  "name": "訪問リストアプリ",
-  "short_name": "訪問リスト",
+  "name": "maplist-app",
+  "short_name": "maplist-app",
   "start_url": "/#search",
   "display": "standalone",
   "background_color": "#0B0D12",
