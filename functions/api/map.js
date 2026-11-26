@@ -1,7 +1,9 @@
 // 提案の地図画像（Cloudflare Pages Functions：POST /api/map）
-// ログインしたメンバーだけ使える。店の位置を番号つきのピンで並べた画像（PNG）を返す。
+// ログイン不要。1つのIPからの連続した大量リクエストは回数制限で止める（1分に30回まで）。
+// 店の位置を番号つきのピンで並べた画像（PNG）を返す。
 // APIキーはサーバーの中だけで使い、画面にもレスポンスにも出さない。
-import { verifyMember, keyOf } from "../../lib/vla-core.js";
+import { keyOf } from "../../lib/vla-core.js";
+import { hitLimit, clientIp, tooMany } from "../../lib/rate-limit.js";
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
@@ -18,8 +20,8 @@ const STYLES = [
 ];
 
 export async function onRequestPost({ request, env }) {
-  const who = await verifyMember(request);
-  if (!who.ok) return json({ ok: false, error: who.error }, who.status);
+  const lim = hitLimit(`map:${clientIp(request)}`, 30, 60_000);
+  if (!lim.ok) return tooMany(lim.retryAfter);
 
   const key = keyOf(env);
   if (!key) return json({ ok: false, error: "地図の設定がまだです（管理者がAPIキーを設定してください）" }, 503);
