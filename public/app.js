@@ -216,6 +216,14 @@
   const DATE_MIN = () => addDays(todayJst(), -2);
   const DATE_MAX = () => addDays(todayJst(), 120);
   const CAL = { search: null, sheet: null }; // 表示中の月（YYYY-MM）
+  const CAL_OPEN = { search: false, sheet: false }; // カレンダーを開いているか（普段は閉じている）
+
+  // 選んだ日付だけの簡易表示。タップするとカレンダーが開く（もう一度で閉じる）
+  function calToggleHTML(kind, sel) {
+    const open = CAL_OPEN[kind];
+    return `<button class="cal-toggle${open ? ' open' : ''}" data-act="cal-toggle" data-kind="${kind}" aria-expanded="${open}">
+      <span>${fmtDate(sel)}</span>${ic('down')}</button>`;
+  }
   let dateCtx = null;                        // 訪問日シートの対象 {id, kind, sel}
 
   function shiftMonth(ym, d) {
@@ -347,7 +355,7 @@
 
   function renderDate() {
     const el = $('#s-date');
-    el.innerHTML = `<p class="date-now">訪問する日：<b>${fmtDate(state.date)}</b></p>${quickDates(state.date, 'search-date')}${calHTML('search', state.date, 'search-date')}`;
+    el.innerHTML = `${calToggleHTML('search', state.date)}${quickDates(state.date, 'search-date')}${CAL_OPEN.search ? calHTML('search', state.date, 'search-date') : ''}`;
   }
 
   function renderInd() {
@@ -395,9 +403,6 @@
       <div class="stack-row"><button class="btn small" data-act="preset-save">今の条件に名前を付けて保存</button></div>`;
   }
 
-  function renderSearchBlocks() {
-    $('#blockBtn').innerHTML = `訪問NGの店（${state.blocks.length}）`;
-  }
 
   // ---------- 提案リスト ----------
   function visibleList() {
@@ -616,7 +621,7 @@
     renderAccount();
     if (!$('#menu').hidden) renderMenu();
     requestAnimationFrame(markEdges);
-    renderArea(); renderRadius(); renderCount(); renderDate(); renderInd(); renderPresets(); renderSearchBlocks();
+    renderArea(); renderRadius(); renderCount(); renderDate(); renderInd(); renderPresets();
     renderProposal(); renderVisitList(); renderLaterList(); renderBadges();
   }
 
@@ -717,6 +722,7 @@
     dateCb = (d) => setVisitDate(id, d, kind);
     dateCtx = { id, kind, sel: it.visitDate || state.date };
     CAL.sheet = null; // 選ばれている日の月から表示
+    CAL_OPEN.sheet = false; // 普段は閉じておく
     openSheet('訪問予定日', '<div id="dateBody"></div>');
     renderDateSheet();
   }
@@ -727,7 +733,7 @@
     if (!el || !dateCtx) return;
     const { id, kind, sel } = dateCtx;
     const extra = `data-id="${id}" data-kind="${kind}"`;
-    el.innerHTML = `${quickDates(sel, 'dpick', extra)}${calHTML('sheet', sel, 'dpick', extra)}
+    el.innerHTML = `${calToggleHTML('sheet', sel)}${quickDates(sel, 'dpick', extra)}${CAL_OPEN.sheet ? calHTML('sheet', sel, 'dpick', extra) : ''}
       <div class="stack"><button class="btn text wide" data-act="dpick-none" data-id="${id}" data-kind="${kind}">日付未定にする</button></div>`;
   }
 
@@ -969,7 +975,12 @@
     'count-open': openCountWheel,
     wi: (el) => { const w = $('#wheel'); if (w) w.scrollTo({ top: COUNTS.indexOf(Number(el.dataset.n)) * ITEM_H, behavior: 'smooth' }); },
     'count-ok': () => { state.count = pendingCount; closeSheet(); renderCount(); renderProposal(); },
-    'search-date': (el) => { state.date = el.dataset.date; renderDate(); },
+    'search-date': (el) => { state.date = el.dataset.date; CAL_OPEN.search = false; renderDate(); }, // 選んだら閉じる
+    'cal-toggle': (el) => {
+      const kind = el.dataset.kind;
+      CAL_OPEN[kind] = !CAL_OPEN[kind];
+      if (kind === 'search') renderDate(); else renderDateSheet();
+    },
     'cal-nav': (el) => {
       const kind = el.dataset.kind;
       CAL[kind] = shiftMonth(CAL[kind], Number(el.dataset.d));
