@@ -1,7 +1,7 @@
 // 店舗検索（Cloudflare Pages Functions：POST /api/search）
 // ログイン不要。1つのIPからの連続した大量リクエストは回数制限で止める（1分に10回まで）。
 // Places の結果を「ウェブサイトなし・チェーン除外」にして返す。
-import { keyOf, searchAll, buildShops, PLACES_CAP } from "../../lib/vla-core.js";
+import { keyOf, searchAll, buildShops, placesHint, PLACES_CAP } from "../../lib/vla-core.js";
 import { hitLimit, clientIp, tooMany } from "../../lib/rate-limit.js";
 
 const json = (body, status = 200) =>
@@ -27,12 +27,6 @@ export async function onRequestPost({ request, env }) {
     const { raw, industryOf } = await searchAll(key, { center, radius: Number(radius) || 1000, town: !!town, viewport, industries: list });
     return json({ ok: true, shops: buildShops(raw, industryOf).slice(0, PLACES_CAP * 4) });
   } catch (e) {
-    const hint = {
-      API_KEY_INVALID: "APIキーが正しくありません（管理者に確認してください）",
-      SERVICE_DISABLED: "Places API (New) が有効になっていません",
-      BILLING_DISABLED: "請求先アカウントが有効になっていません",
-      REQUEST_DENIED: "APIの利用が許可されていません",
-    }[e.reason];
-    return json({ ok: false, error: hint || "店舗の取得に失敗しました。時間をおいてもう一度お試しください" }, 502);
+    return json({ ok: false, error: placesHint(e.reason) || "店舗の取得に失敗しました。時間をおいてもう一度お試しください" }, 502);
   }
 }
