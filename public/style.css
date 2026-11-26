@@ -187,6 +187,11 @@ button:disabled { opacity: .45; cursor: default; }
 .calc td:last-child { text-align: right; color: var(--text); }
 .calc .sum td { font-weight: 700; }
 .reasons { margin: 10px 0 0; padding-left: 18px; color: var(--sub); font-size: 14px; }
+.reasons li { margin: 5px 0; line-height: 1.6; }
+/* 店カードの上段：順位・業種を左に、総合おすすめ度を右上に */
+.shop-head { justify-content: flex-start; }
+.shop-head .overall { width: auto; min-height: 34px; padding: 0 14px; margin: 0 0 0 auto; gap: 3px; justify-content: center; }
+.shop-head .overall b { font-size: 17px; }
 .meta { display: flex; gap: 6px; align-items: flex-start; margin: 10px 0 0; font-size: 14px; color: var(--sub); }
 .meta .ic { margin-top: 3px; }
 .meta-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; font-size: 13px; color: var(--sub); }

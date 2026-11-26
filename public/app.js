@@ -99,21 +99,55 @@
     return s.staff == null ? '従業員数は未取得' : `従業員 ${s.staff}名`;
   }
 
-  function reasonText(s, k) {
-    if (k === 'rating') return `評価 ${s.rating}（口コミ${s.reviews}件）`;
-    if (k === 'reviews') return `口コミ${s.reviews}件と実績が多い`;
-    if (k === 'fresh') return `${s.opened}年開業の新しい店`;
-    return `従業員${s.staff}名の小規模店で決めやすい`;
+  // 理由の文章（点数ごとに、シンプルな項目は短く、大事な項目は詳しく書く）
+  function reasonDetail(s, k) {
+    const v = s.sub[k];
+    if (k === 'rating') {
+      if (v === 5) return `Googleの評価が${s.rating}と非常に高く、口コミ${s.reviews}件に支えられた信頼のあるお店です`;
+      if (v === 4) return `評価${s.rating}と高めで、初めての訪問でも話を聞いてもらいやすいお店です`;
+      if (v === 3) return `評価${s.rating}は平均的で、無理のない訪問先です`;
+      return `評価${s.rating}はやや低めです。訪問前に店の強みを確認してから回ると安心です`;
+    }
+    if (k === 'reviews') {
+      if (v === 5) return `口コミが${s.reviews}件と多く、地域で長く選ばれている実績があります`;
+      if (v === 4) return `口コミが${s.reviews}件あり、お客さんに選ばれている実績があります`;
+      if (v === 3) return `口コミは${s.reviews}件で、一定の実績があります`;
+      return `口コミは${s.reviews}件と少なめです`;
+    }
+    if (k === 'fresh') {
+      const age = NOW_YEAR - s.opened;
+      if (v === 5) return `${s.opened}年開業（${age}年目）と新しく、新規の取引先やサービスを探している時期の可能性があります`;
+      if (v === 4) return `${s.opened}年開業（${age}年目）で比較的新しく、店の仕組みを見直している時期かもしれません`;
+      if (v === 3) return `${s.opened}年開業（${age}年目）で、経営が安定している時期です`;
+      return `${s.opened}年開業の歴史ある店で、取引先や仕入れが固まっていることが多いです`;
+    }
+    // 成約しやすさ（従業員数）
+    if (v === 5) return `従業員${s.staff}名の少人数で、オーナーが直接決めやすい規模です`;
+    if (v === 4) return `従業員${s.staff}名で、決裁する人に直接話が届きやすい規模です`;
+    if (v === 3) return `従業員${s.staff}名の中規模店で、担当者を通して話を進める形になります`;
+    return `従業員${s.staff}名の規模で、決裁に複数の人が関わる可能性があります`;
+  }
+
+  // 理由は3〜5項目。点数4以上の項目を詳しく書く（足りないときは上位3つまで広げる）。
+  // 近い店（1km以内）には、移動の負担が少ないことも理由に足す。
+  function buildReasons(s, sub) {
+    const known = KEYS.filter((k) => !(k === 'fresh' && s.opened == null) && !(k === 'fit' && s.staff == null));
+    const ranked = known.slice().sort((a, b) => sub[b] - sub[a]);
+    let picked = ranked.filter((k) => sub[k] >= 4);
+    if (picked.length < 3) picked = ranked.slice(0, 3);
+    const list = picked.slice(0, 4).map((k) => reasonDetail({ ...s, sub }, k));
+    if (s.distance <= 1000 && list.length < 5) {
+      const near = s.distance < 300 ? 'すぐ近くにあり' : `現在地から${fmtDist(s.distance)}と近く`;
+      list.push(`${near}、移動の負担が少なく回れます`);
+    }
+    return list;
   }
 
   function withScores(s) {
     const sub = subScores(s);
     const total5 = KEYS.reduce((a, k) => a + sub[k] * W[k], 0);
     const overall = Math.round(total5 * 2 * 10) / 10;
-    // 理由は、データがある項目から選ぶ（未取得の項目は理由にしない）
-    const known = KEYS.filter((k) => !(k === 'fresh' && s.opened == null) && !(k === 'fit' && s.staff == null));
-    const top = known.slice().sort((a, b) => sub[b] - sub[a]).slice(0, 3);
-    return { ...s, sub, total5, overall, reasons: top.map((k) => reasonText(s, k)) };
+    return { ...s, sub, total5, overall, reasons: buildReasons(s, sub) };
   }
 
   const SORTERS = {
@@ -351,10 +385,11 @@
       : inList ? `<div class="banner">${ic('info')}訪問リストに入っています</div>` : '';
     return `<article class="card shop">
       ${banner}
-      <div class="shop-head"><span class="rank">${rank}位</span><span class="tag">${esc(s.industry)}</span></div>
+      <div class="shop-head">
+        <span class="rank">${rank}位</span><span class="tag">${esc(s.industry)}</span>
+        <button class="overall${exp('overall') ? ' open' : ''}" data-act="p-expand" data-id="${s.id}" data-k="overall" aria-label="総合おすすめ度 ${s.overall.toFixed(1)}点（詳しく見る）"><b>${s.overall.toFixed(1)}</b><small>/ 10</small></button>
+      </div>
       <h3 class="shop-name">${esc(s.name)}</h3>
-      <button class="overall${exp('overall') ? ' open' : ''}" data-act="p-expand" data-id="${s.id}" data-k="overall">
-        <span>総合おすすめ度</span><b>${s.overall.toFixed(1)}</b><small>/ 10</small></button>
       ${exp('overall') ? overallDetail(s) : ''}
       <div class="scores">${KEYS.map((k) => `<button class="score${exp(k) ? ' open' : ''}" data-act="p-expand" data-id="${s.id}" data-k="${k}"><span>${LABEL[k]}</span><b>${s.sub[k]}</b><small>/5</small></button>`).join('')}</div>
       ${KEYS.map((k) => (exp(k) ? scoreDetail(s, k) : '')).join('')}
