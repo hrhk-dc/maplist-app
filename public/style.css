@@ -87,7 +87,8 @@ button:disabled { opacity: .45; cursor: default; }
 .btn[disabled] { opacity: .4; }
 /* メインの操作：シアン→マゼンタの柔らかい光＋白文字（画面で1か所だけ） */
 .btn.primary {
-  background: linear-gradient(90deg, rgba(0, 229, 255, .55), rgba(255, 46, 136, .55));
+  /* 下に黒の下地を敷き、後ろのチップが透けないようにする */
+  background: linear-gradient(90deg, rgba(0, 229, 255, .55), rgba(255, 46, 136, .55)), #0B0D12;
   border-color: transparent; color: #fff;
   box-shadow: 0 0 22px rgba(255, 46, 136, .28), 0 0 14px rgba(0, 229, 255, .22), 0 6px 14px rgba(0, 0, 0, .35);
 }
@@ -262,5 +263,11 @@ button:disabled { opacity: .45; cursor: default; }
   background: #1a1c23; border: 1px solid var(--line); font-size: 14px; pointer-events: none; transition: opacity .3s, transform .3s;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ログイン欄（未ログイン・ログイン中とも、1行に収める） */
+.account { margin-top: 14px; }
+.acct { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.acct-who { display: flex; flex-direction: column; min-width: 0; flex: 1 1 160px; }
+.acct-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
 
 @media (min-width: 560px) { .dock { max-width: 560px; margin: 0 auto; left: 0; right: 0; } }

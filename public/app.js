@@ -132,6 +132,7 @@
     industries: new Set(),   // 検索画面で選んだ業種（空＝全業種）
     indTab: 0,
     presets: LS.get('presets', []),
+    user: null,              // ログイン中の利用者（{name}）。未ログインは null
     blocks: [],
     pool: [],                // 検索で取得した候補（おすすめ点つき）
     snap: null,              // 検索時の条件（提案画面の要約用）
@@ -434,7 +435,53 @@
     $$('[data-badge]').forEach((el) => { const c = n[el.dataset.badge]; el.textContent = c ? String(c) : ''; });
   }
 
+  // ---------- ログイン（Googleログインのみ） ----------
+  function renderAccount() {
+    const el = $('#account');
+    if (!el) return;
+    const u = state.user;
+    el.innerHTML = u
+      ? `<div class="acct"><div class="acct-who"><span class="sub">ログイン中</span><b>${esc(u.name)}</b></div>
+           <button class="btn small" data-act="logout">ログアウト</button></div>`
+      : `<div class="acct"><div class="acct-who"><span class="sub">ログインしてください</span></div>
+           <button class="btn small" data-act="login">Googleでログイン</button></div>`;
+  }
+
+  // ログインの状態を読み直す（未ログインなら一覧は空・候補も消す）
+  async function refreshUser() {
+    try {
+      const u = await D.currentUser();
+      state.user = u ? { name: u.displayName || u.email || 'ログイン中' } : null;
+    } catch (e) {
+      state.user = null;
+    }
+    state.blocks = state.user ? await D.getBlocks() : [];
+    if (!state.user) { state.pool = []; state.snap = null; }
+    renderAll();
+  }
+
+  async function login() {
+    try {
+      await D.signIn();
+      await refreshUser();
+      if (state.user) toast('ログインしました');
+    } catch (e) {
+      toast(e && e.code === 'auth/popup-closed-by-user' ? 'ログインを中止しました' : 'ログインできませんでした。もう一度お試しください');
+    }
+  }
+
+  async function logout() {
+    try {
+      await D.signOut();
+      await refreshUser();
+      toast('ログアウトしました');
+    } catch (e) {
+      toast('ログアウトできませんでした。もう一度お試しください');
+    }
+  }
+
   function renderAll() {
+    renderAccount();
     renderArea(); renderRadius(); renderCount(); renderDate(); renderInd(); renderPresets(); renderSearchBlocks();
     renderProposal(); renderVisitList(); renderLaterList(); renderBadges();
   }
@@ -458,6 +505,7 @@
 
   // ---------- 検索の実行 ----------
   async function runSearch() {
+    if (!state.user) return toast('先にログインしてください');
     const a = state.area;
     let center, viewport = null;
     const btn = $('[data-act="run-search"]');
@@ -671,6 +719,8 @@
 
   // ---------- 操作の登録（クリックの委任） ----------
   const ACT = {
+    login: () => login(),
+    logout: () => logout(),
     'area-mode': (el) => { state.area.mode = el.dataset.v; renderArea(); },
     gps: () => locate(() => renderArea()),
     radius: (el) => { state.radius = el.dataset.v; renderRadius(); },
@@ -733,11 +783,11 @@
   // ---------- 起動 ----------
   async function init() {
     renderNav();
-    state.blocks = await D.getBlocks();
     const note = $('#demoNote');
     if (note) note.hidden = !D.isSample;
     renderAll();
     showScreen();
+    await refreshUser(); // 画面は先に出し、ログイン状態は後から反映する
   }
   init();
 })();
