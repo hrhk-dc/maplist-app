@@ -1,8 +1,9 @@
-// 訪問リストアプリ：サービスワーカー
+// maplist-app：サービスワーカー
 // 画面のファイルは「ネット優先・つながらない時だけ保存版」を使う
 // 店の候補データ（API）は保存しない
-const CACHE = "visit-list-v1";
-const SHELL = ["/", "/index.html", "/style.css", "/app.js", "/data.js", "/manifest.webmanifest"];
+const CACHE = "maplist-v1";
+const SHELL = ["/", "/index.html", "/style.css", "/app.js", "/data.js", "/manifest.webmanifest",
+  "/icon.svg", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/apple-touch-icon.png", "/favicon-32.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

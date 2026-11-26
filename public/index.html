@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0B0D12">
   <meta name="description" content="ウェブサイトが載っていない店だけを、営業しやすさまで見ておすすめ順に並べます。">
-  <title>訪問リストアプリ</title>
+  <title>maplist-app</title>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,25 +16,37 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <!-- 全画面共通の固定ヘッダー（右上の三本線でメニューを開く） -->
+  <header class="topbar" id="topbar">
+    <span class="brand">maplist-app</span>
+    <button class="icon-btn menu-btn" data-act="menu" aria-label="メニュー" aria-expanded="false" aria-controls="menu">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </header>
+  <nav class="menu" id="menu" hidden aria-label="メニュー項目"></nav>
+
   <main id="app">
 
     <!-- 検索 -->
     <section class="screen" data-screen="search" aria-label="検索">
       <header class="hero">
-        <h1>訪問リストアプリ</h1>
+        <h1>maplist-app</h1>
         <p class="lead">ウェブサイトが載っていない店だけを、営業しやすさまで見ておすすめ順に並べます。（チェーン店は除外）</p>
         <p class="demo-note" id="demoNote">表示中はサンプルデータです（API未接続）</p>
       </header>
 
+      <div class="card account" id="account"></div>
       <div class="card"><h2 class="sec">エリア</h2><div id="s-area"></div></div>
       <div class="card"><h2 class="sec">半径</h2><div id="s-radius"></div></div>
       <div class="card">
         <div class="row-between"><h2 class="sec">件数</h2><div id="s-count"></div></div>
       </div>
       <div class="card"><h2 class="sec">訪問する日</h2><div id="s-date"></div></div>
-      <div class="card"><h2 class="sec">業種</h2><div id="s-ind"></div></div>
-      <div class="card"><h2 class="sec">お気に入り条件</h2><div id="s-presets"></div></div>
-      <div class="card"><button class="btn wide" data-act="block-list" id="blockBtn">訪問NGの店</button></div>
+      <div class="card">
+        <div class="row-between sec-row"><h2 class="sec">業種</h2><button class="pill-btn" id="allInd" data-act="ind-all">全て</button></div>
+        <div id="s-ind"></div>
+      </div>
+      <div class="card" id="presetCard"><h2 class="sec">お気に入り条件</h2><div id="s-presets"></div></div>
 
       <div class="dock"><button class="btn primary wide" data-act="run-search">提案リストを作る</button></div>
     </section>
@@ -43,6 +58,7 @@
         <p class="summary" id="pSummary"></p>
       </header>
       <div class="seg" id="pSort" role="tablist"></div>
+      <div class="seg two view-seg" id="pView" role="tablist"></div>
       <div class="card"><h2 class="sec">業種で絞り込み</h2><div class="chips" id="pInd"></div></div>
       <div class="card row-between">
         <span id="pOpenLabel"></span>

@@ -54,6 +54,7 @@
     gps: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>',
     block: '<circle cx="12" cy="12" r="8.5"/><path d="M6 18L18 6"/>',
     back: '<path d="M15 6l-6 6 6 6"/>',
+    next: '<path d="M9 6l6 6-6 6"/>',
     ext: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   };
   const ic = (name, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
@@ -71,8 +72,8 @@
   const CRIT = {
     rating: '4.5以上＝5点／4.0以上＝4点／3.5以上＝3点／3.0以上＝2点／それ未満＝1点',
     reviews: '200件以上＝5点／100件以上＝4点／50件以上＝3点／10件以上＝2点／9件以下＝1点',
-    fresh: '開業2年以内＝5点／5年以内＝4点／10年以内＝3点／20年以内＝2点／それ以上＝1点',
-    fit: '従業員5名以下＝5点／10名以下＝4点／30名以下＝3点／それ以上＝2点',
+    fresh: '開業2年以内＝5点／5年以内＝4点／10年以内＝3点／20年以内＝2点／それ以上＝1点。開業年が分からない店は3点（中立）',
+    fit: '従業員5名以下＝5点／10名以下＝4点／30名以下＝3点／それ以上＝2点。従業員数が分からない店は3点（中立）',
   };
   const WHY = {
     rating: '口コミ評価が高く、店の信頼が見込める',
@@ -86,31 +87,68 @@
     return {
       rating: s.rating >= 4.5 ? 5 : s.rating >= 4 ? 4 : s.rating >= 3.5 ? 3 : s.rating >= 3 ? 2 : 1,
       reviews: s.reviews >= 200 ? 5 : s.reviews >= 100 ? 4 : s.reviews >= 50 ? 3 : s.reviews >= 10 ? 2 : 1,
-      fresh: age <= 2 ? 5 : age <= 5 ? 4 : age <= 10 ? 3 : age <= 20 ? 2 : 1,
-      fit: s.staff <= 5 ? 5 : s.staff <= 10 ? 4 : s.staff <= 30 ? 3 : 2,
+      // 開業年・従業員数は Google Places に無いので、分からない店は3点（中立）
+      fresh: s.opened == null ? 3 : age <= 2 ? 5 : age <= 5 ? 4 : age <= 10 ? 3 : age <= 20 ? 2 : 1,
+      fit: s.staff == null ? 3 : s.staff <= 5 ? 5 : s.staff <= 10 ? 4 : s.staff <= 30 ? 3 : 2,
     };
   }
 
   function evidence(s, k) {
     if (k === 'rating') return `評価 ${s.rating}（5点満点）`;
     if (k === 'reviews') return `口コミ ${s.reviews}件`;
-    if (k === 'fresh') return `開業 ${s.opened}年（${NOW_YEAR - s.opened}年目）`;
-    return `従業員 ${s.staff}名`;
+    if (k === 'fresh') return s.opened == null ? '開業年は未取得' : `開業 ${s.opened}年（${NOW_YEAR - s.opened}年目）`;
+    return s.staff == null ? '従業員数は未取得' : `従業員 ${s.staff}名`;
   }
 
-  function reasonText(s, k) {
-    if (k === 'rating') return `評価 ${s.rating}（口コミ${s.reviews}件）`;
-    if (k === 'reviews') return `口コミ${s.reviews}件と実績が多い`;
-    if (k === 'fresh') return `${s.opened}年開業の新しい店`;
-    return `従業員${s.staff}名の小規模店で決めやすい`;
+  // 理由の文章（点数ごとに、シンプルな項目は短く、大事な項目は詳しく書く）
+  function reasonDetail(s, k) {
+    const v = s.sub[k];
+    if (k === 'rating') {
+      if (v === 5) return `Googleの評価が${s.rating}と非常に高く、口コミ${s.reviews}件に支えられた信頼のあるお店です`;
+      if (v === 4) return `評価${s.rating}と高めで、初めての訪問でも話を聞いてもらいやすいお店です`;
+      if (v === 3) return `評価${s.rating}は平均的で、無理のない訪問先です`;
+      return `評価${s.rating}はやや低めです。訪問前に店の強みを確認してから回ると安心です`;
+    }
+    if (k === 'reviews') {
+      if (v === 5) return `口コミが${s.reviews}件と多く、地域で長く選ばれている実績があります`;
+      if (v === 4) return `口コミが${s.reviews}件あり、お客さんに選ばれている実績があります`;
+      if (v === 3) return `口コミは${s.reviews}件で、一定の実績があります`;
+      return `口コミは${s.reviews}件と少なめです`;
+    }
+    if (k === 'fresh') {
+      const age = NOW_YEAR - s.opened;
+      if (v === 5) return `${s.opened}年開業（${age}年目）と新しく、新規の取引先やサービスを探している時期の可能性があります`;
+      if (v === 4) return `${s.opened}年開業（${age}年目）で比較的新しく、店の仕組みを見直している時期かもしれません`;
+      if (v === 3) return `${s.opened}年開業（${age}年目）で、経営が安定している時期です`;
+      return `${s.opened}年開業の歴史ある店で、取引先や仕入れが固まっていることが多いです`;
+    }
+    // 成約しやすさ（従業員数）
+    if (v === 5) return `従業員${s.staff}名の少人数で、オーナーが直接決めやすい規模です`;
+    if (v === 4) return `従業員${s.staff}名で、決裁する人に直接話が届きやすい規模です`;
+    if (v === 3) return `従業員${s.staff}名の中規模店で、担当者を通して話を進める形になります`;
+    return `従業員${s.staff}名の規模で、決裁に複数の人が関わる可能性があります`;
+  }
+
+  // 理由は3〜5項目。点数4以上の項目を詳しく書く（足りないときは上位3つまで広げる）。
+  // 近い店（1km以内）には、移動の負担が少ないことも理由に足す。
+  function buildReasons(s, sub) {
+    const known = KEYS.filter((k) => !(k === 'fresh' && s.opened == null) && !(k === 'fit' && s.staff == null));
+    const ranked = known.slice().sort((a, b) => sub[b] - sub[a]);
+    let picked = ranked.filter((k) => sub[k] >= 4);
+    if (picked.length < 3) picked = ranked.slice(0, 3);
+    const list = picked.slice(0, 4).map((k) => reasonDetail({ ...s, sub }, k));
+    if (s.distance <= 1000 && list.length < 5) {
+      const near = s.distance < 300 ? 'すぐ近くにあり' : `現在地から${fmtDist(s.distance)}と近く`;
+      list.push(`${near}、移動の負担が少なく回れます`);
+    }
+    return list;
   }
 
   function withScores(s) {
     const sub = subScores(s);
     const total5 = KEYS.reduce((a, k) => a + sub[k] * W[k], 0);
     const overall = Math.round(total5 * 2 * 10) / 10;
-    const top = KEYS.slice().sort((a, b) => sub[b] - sub[a]).slice(0, 3);
-    return { ...s, sub, total5, overall, reasons: top.map((k) => reasonText(s, k)) };
+    return { ...s, sub, total5, overall, reasons: buildReasons(s, sub) };
   }
 
   const SORTERS = {
@@ -129,10 +167,12 @@
     industries: new Set(),   // 検索画面で選んだ業種（空＝全業種）
     indTab: 0,
     presets: LS.get('presets', []),
+    user: null,              // ログイン中の利用者（{name}）。未ログインは null
     blocks: [],
     pool: [],                // 検索で取得した候補（おすすめ点つき）
     snap: null,              // 検索時の条件（提案画面の要約用）
     pSort: 'rec',
+    pView: 'list',           // 提案の表示：一覧（list）か地図（map）
     pIndustries: new Set(),  // 提案画面の業種絞り込み（空＝全業種）
     openOnly: true,
     expanded: new Set(),
@@ -171,6 +211,75 @@
     }).join('')}</div>`;
   }
 
+  // ---------- 日付：今日・明日＋カレンダー（月をまたいで選べる） ----------
+  // 選べる範囲：2日前〜120日先（JST）
+  const DATE_MIN = () => addDays(todayJst(), -2);
+  const DATE_MAX = () => addDays(todayJst(), 120);
+  const CAL = { search: null, sheet: null }; // 表示中の月（YYYY-MM）
+  const CAL_OPEN = { search: false, sheet: false }; // カレンダーを開いているか（普段は閉じている）
+
+  // 選んだ日付だけの簡易表示。タップするとカレンダーが開く（もう一度で閉じる）
+  function calToggleHTML(kind, sel) {
+    const open = CAL_OPEN[kind];
+    return `<button class="cal-toggle${open ? ' open' : ''}" data-act="cal-toggle" data-kind="${kind}" aria-expanded="${open}">
+      <span>${fmtDate(sel)}</span>${ic('down')}</button>`;
+  }
+  let dateCtx = null;                        // 訪問日シートの対象 {id, kind, sel}
+
+  function shiftMonth(ym, d) {
+    const [y, m] = ym.split('-').map(Number);
+    return ymdOf(new Date(Date.UTC(y, m - 1 + d, 1))).slice(0, 7);
+  }
+
+  // 今日・明日のボタン（選ばれている日は縁を光らせる）
+  function quickDates(sel, act, extra = '') {
+    const t = todayJst();
+    return `<div class="quick">${[['今日', t], ['明日', addDays(t, 1)]].map(([l, d]) =>
+      `<button class="pill-btn${d === sel ? ' on' : ''}" data-act="${act}" data-date="${d}" ${extra}>${l}　${Number(d.slice(5, 7))}/${Number(d.slice(8))}</button>`).join('')}</div>`;
+  }
+
+  // カレンダー（kind は 'search' か 'sheet'）
+  function calHTML(kind, sel, act, extra = '') {
+    const min = DATE_MIN(), max = DATE_MAX(), t = todayJst();
+    if (!CAL[kind]) CAL[kind] = (sel || t).slice(0, 7);
+    const ym = CAL[kind];
+    const [y, m] = ym.split('-').map(Number);
+    const last = ymdOf(new Date(Date.UTC(y, m, 0)));
+    const prevOk = last >= min;
+    const nextOk = addDays(last, 1) <= max;
+    let cells = '';
+    for (let i = 0; i < wdOf(`${ym}-01`); i++) cells += '<span></span>';
+    for (let day = 1; day <= Number(last.slice(8)); day++) {
+      const d = `${ym}-${pad(day)}`;
+      const off = d < min || d > max;
+      cells += `<button class="cal-day${d === sel ? ' on' : ''}${d === t ? ' today' : ''}" data-act="${act}" data-date="${d}" ${extra}${off ? ' disabled' : ''} aria-label="${fmtDate(d)}">${day}</button>`;
+    }
+    return `<div class="cal">
+      <div class="cal-head">
+        <button class="icon-btn cal-nav" data-act="cal-nav" data-kind="${kind}" data-d="-1" ${prevOk ? '' : 'disabled'} aria-label="前の月">${ic('back')}</button>
+        <b>${y}年${m}月</b>
+        <button class="icon-btn cal-nav" data-act="cal-nav" data-kind="${kind}" data-d="1" ${nextOk ? '' : 'disabled'} aria-label="次の月">${ic('next')}</button>
+      </div>
+      <div class="cal-grid">${WD_JP.map((w) => `<span class="cal-wd">${w}</span>`).join('')}${cells}</div>
+    </div>`;
+  }
+
+  // 横にスクロールする行の端に、続きがある合図（グラデーション）を出す
+  function markEdges() {
+    $$('.hscroll').forEach((el) => {
+      const w = el.parentElement;
+      if (!w) return;
+      const max = el.scrollWidth - el.clientWidth;
+      w.classList.toggle('edge-l', el.scrollLeft > 4);
+      w.classList.toggle('edge-r', max > 4 && el.scrollLeft < max - 4);
+    });
+  }
+  document.addEventListener('scroll', (e) => {
+    if (e.target && e.target.classList && e.target.classList.contains('hscroll')) markEdges();
+  }, true);
+  window.addEventListener('resize', markEdges);
+
+  // （旧）日付チップ行。新しい日付の表示では使わない
   function dateStrip(sel, act, extra = '') {
     const t = todayJst();
     let h = '';
@@ -236,8 +345,8 @@
   }
 
   function renderRadius() {
-    $('#s-radius').innerHTML = `<div class="seg scroll">${RADIUS.map(([k, l]) =>
-      `<button class="${state.radius === k ? 'on' : ''}" data-act="radius" data-v="${k}">${l}</button>`).join('')}</div>`;
+    $('#s-radius').innerHTML = `<div class="hwrap"><div class="seg scroll hscroll">${RADIUS.map(([k, l]) =>
+      `<button class="${state.radius === k ? 'on' : ''}" data-act="radius" data-v="${k}">${l}</button>`).join('')}</div></div>`;
   }
 
   function renderCount() {
@@ -246,9 +355,7 @@
 
   function renderDate() {
     const el = $('#s-date');
-    el.innerHTML = `<p class="date-now">訪問する日：<b>${fmtDate(state.date)}</b></p>${dateStrip(state.date, 'search-date')}`;
-    const on = $('.dchip.on', el);
-    if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+    el.innerHTML = `${calToggleHTML('search', state.date)}${quickDates(state.date, 'search-date')}${CAL_OPEN.search ? calHTML('search', state.date, 'search-date') : ''}`;
   }
 
   function renderInd() {
@@ -259,24 +366,43 @@
       return `<button class="htab${i === state.indTab ? ' on' : ''}" data-act="ind-tab" data-i="${i}">${esc(gr.name)}${c ? `<span class="cnt">${c}</span>` : ''}</button>`;
     }).join('');
     const all = g.items.every((n) => state.industries.has(n));
+    // 「全て」：33業種すべてが選ばれていれば「解除」に切り替える
+    const everyIndustry = D.GROUPS.every((gr) => gr.items.every((n) => state.industries.has(n)));
+    const allBtn = $('#allInd');
+    if (allBtn) {
+      allBtn.textContent = everyIndustry ? '解除' : '全て';
+      allBtn.classList.toggle('on', everyIndustry);
+    }
     $('#s-ind').innerHTML = `
-      <div class="htabs" role="tablist">${tabs}</div>
+      <div class="hwrap"><div class="htabs hscroll" role="tablist">${tabs}</div></div>
       <div class="ind-head"><span class="sub">${esc(g.name)}（${g.items.length}業種）</span>
         <button class="pill-btn${all ? ' on' : ''}" data-act="ind-group">${all ? 'まるごと解除' : 'まるごと選択'}</button></div>
       <div class="chips">${g.items.map((n) => `<button class="chip${state.industries.has(n) ? ' on' : ''}" data-act="ind" data-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>
       <p class="hint">${state.industries.size ? `選択中 ${state.industries.size}業種` : '未選択なら全業種が対象です'}</p>`;
   }
 
-  function renderPresets() {
-    const chips = state.presets.map((p, i) =>
-      `<span class="chip preset"><button data-act="preset-apply" data-i="${i}">${esc(p.name)}</button><button class="x" data-act="preset-del" data-i="${i}" aria-label="削除">${ic('x')}</button></span>`).join('');
-    $('#s-presets').innerHTML = `<div class="chips">${chips || '<p class="hint">よく使う条件を保存できます</p>'}</div>
-      <div class="stack-row"><button class="btn small" data-act="preset-save">今の条件を保存</button></div>`;
+  // 条件の中身を一行で（一覧の説明文）
+  function presetSummary(p) {
+    const place = p.area && p.area.mode === 'gps' ? '現在地' : ((p.area && p.area.address) || '住所未入力');
+    const rad = RADIUS.find((r) => r[0] === p.radius);
+    const inds = (p.industries || []).length ? `${p.industries.length}業種` : '全業種';
+    return `${place}・${rad ? rad[1] : p.radius}・${p.count}件・${inds}`;
   }
 
-  function renderSearchBlocks() {
-    $('#blockBtn').innerHTML = `訪問NGの店（${state.blocks.length}）`;
+  function renderPresets() {
+    const rows = state.presets.map((p, i) => `
+      <li class="prow">
+        <button class="prow-main" data-act="preset-apply" data-i="${i}">
+          <b>${esc(p.name)}</b><small>${esc(presetSummary(p))}</small>
+        </button>
+        <button class="btn small danger" data-act="preset-del" data-i="${i}" aria-label="${esc(p.name)}を削除">${ic('x')}削除</button>
+      </li>`).join('');
+    $('#s-presets').innerHTML = `${rows
+      ? `<ul class="plist">${rows}</ul>`
+      : '<p class="hint">よく使う条件を、名前を付けて保存できます（例：渋谷・飲食店）</p>'}
+      <div class="stack-row"><button class="btn small" data-act="preset-save">今の条件に名前を付けて保存</button></div>`;
   }
+
 
   // ---------- 提案リスト ----------
   function visibleList() {
@@ -291,6 +417,7 @@
     if (!sn) {
       $('#pSummary').textContent = 'まだ提案がありません。';
       $('#pSort').innerHTML = '';
+      $('#pView').innerHTML = '';
       $('#pInd').innerHTML = '';
       $('#pOpenLabel').textContent = '';
       $('#pList').innerHTML = `<div class="empty"><p>まだ提案がありません。</p><button class="btn primary" data-act="go-search">条件を決める</button></div>`;
@@ -299,6 +426,8 @@
     $('#pSummary').textContent = `${sn.area}／半径 ${sn.radius}／${sn.count}件／訪問日 ${fmtDate(state.date)}／${sn.industry}`;
     $('#pSort').innerHTML = [['rec', 'おすすめ順'], ['dist', '近い順'], ['rating', '評価順']].map(([k, l]) =>
       `<button class="${state.pSort === k ? 'on' : ''}" data-act="p-sort" data-v="${k}">${l}</button>`).join('');
+    $('#pView').innerHTML = [['list', '一覧'], ['map', '地図で見る']].map(([k, l]) =>
+      `<button class="${state.pView === k ? 'on' : ''}" data-act="p-view" data-v="${k}">${l}</button>`).join('');
 
     const inds = [...new Set(state.pool.map((s) => s.industry))];
     $('#pInd').innerHTML = inds.map((n) => `<button class="chip${state.pIndustries.has(n) ? ' on' : ''}" data-act="p-ind" data-name="${esc(n)}">${esc(n)}</button>`).join('')
@@ -309,6 +438,11 @@
     sw.setAttribute('aria-checked', String(state.openOnly));
 
     const list = visibleList();
+    if (state.pView === 'map') {
+      $('#pList').innerHTML = mapPanelHTML(list);
+      loadMap(list);
+      return;
+    }
     $('#pList').innerHTML = list.length
       ? list.map((s, i) => proposalCard(s, i + 1)).join('')
       : `<div class="empty"><p>条件に合う店がありませんでした。</p><p class="hint">半径を広げるか、条件を変えてもう一度お試しください。</p></div>`;
@@ -316,7 +450,7 @@
 
   function overallDetail(s) {
     const rows = KEYS.map((k) => `<tr><td>${LABEL[k]}</td><td>${s.sub[k]}点・重み${Math.round(W[k] * 100)}%</td><td>${(s.sub[k] * W[k]).toFixed(2)}</td></tr>`).join('');
-    return `<div class="detail"><p class="detail-title">総合おすすめ度の計算</p>
+    return `<div class="detail"><p class="detail-title">点数の計算</p>
       <table class="calc">${rows}
         <tr class="sum"><td>合計（5点満点）</td><td></td><td>${s.total5.toFixed(2)}</td></tr>
         <tr class="sum"><td>10点満点にする</td><td>2倍</td><td>${s.overall.toFixed(1)}</td></tr>
@@ -340,10 +474,11 @@
       : inList ? `<div class="banner">${ic('info')}訪問リストに入っています</div>` : '';
     return `<article class="card shop">
       ${banner}
-      <div class="shop-head"><span class="rank">${rank}位</span><span class="tag">${esc(s.industry)}</span></div>
+      <div class="shop-head">
+        <span class="rank">${rank}位</span><span class="tag">${esc(s.industry)}</span>
+        <button class="overall${exp('overall') ? ' open' : ''}" data-act="p-expand" data-id="${s.id}" data-k="overall" aria-label="${s.overall.toFixed(1)}点（詳しく見る）"><b>${s.overall.toFixed(1)}</b><small>/ 10</small></button>
+      </div>
       <h3 class="shop-name">${esc(s.name)}</h3>
-      <button class="overall${exp('overall') ? ' open' : ''}" data-act="p-expand" data-id="${s.id}" data-k="overall">
-        <span>総合おすすめ度</span><b>${s.overall.toFixed(1)}</b><small>/ 10</small></button>
       ${exp('overall') ? overallDetail(s) : ''}
       <div class="scores">${KEYS.map((k) => `<button class="score${exp(k) ? ' open' : ''}" data-act="p-expand" data-id="${s.id}" data-k="${k}"><span>${LABEL[k]}</span><b>${s.sub[k]}</b><small>/5</small></button>`).join('')}</div>
       ${KEYS.map((k) => (exp(k) ? scoreDetail(s, k) : '')).join('')}
@@ -431,8 +566,61 @@
     $$('[data-badge]').forEach((el) => { const c = n[el.dataset.badge]; el.textContent = c ? String(c) : ''; });
   }
 
+  // ---------- ログイン（Googleログインのみ） ----------
+  function renderAccount() {
+    const el = $('#account');
+    if (!el) return;
+    const u = state.user;
+    el.innerHTML = u
+      ? `<div class="acct"><div class="acct-who"><span class="sub">ログイン中</span><b>${esc(u.name)}</b></div>
+           <button class="btn small" data-act="logout">ログアウト</button></div>`
+      : `<div class="acct"><div class="acct-who"><span class="sub">ログインしてください</span></div>
+           <button class="btn small" data-act="login">Googleでログイン</button></div>`;
+  }
+
+  // ログインの状態を読み直す（未ログインなら一覧は空・候補も消す）
+  // 後から始めた読み直しを優先する（古い結果が新しいログイン結果を上書きしない）
+  let userSeq = 0;
+  async function refreshUser() {
+    const mine = ++userSeq;
+    let user = null;
+    try {
+      const u = await D.currentUser();
+      user = u ? { name: u.displayName || u.email || 'ログイン中' } : null;
+    } catch (e) {
+      user = null;
+    }
+    if (mine !== userSeq) return; // より新しい読み直しがあれば、この結果は捨てる
+    state.user = user;
+    state.blocks = await D.getBlocks(); // 未ログインでも、この端末の訪問NGを使う
+    renderAll();
+  }
+
+  async function login() {
+    try {
+      await D.signIn();
+      await refreshUser();
+      if (state.user) toast('ログインしました');
+    } catch (e) {
+      toast(e && e.code === 'auth/popup-closed-by-user' ? 'ログインを中止しました' : 'ログインできませんでした。もう一度お試しください');
+    }
+  }
+
+  async function logout() {
+    try {
+      await D.signOut();
+      await refreshUser();
+      toast('ログアウトしました');
+    } catch (e) {
+      toast('ログアウトできませんでした。もう一度お試しください');
+    }
+  }
+
   function renderAll() {
-    renderArea(); renderRadius(); renderCount(); renderDate(); renderInd(); renderPresets(); renderSearchBlocks();
+    renderAccount();
+    if (!$('#menu').hidden) renderMenu();
+    requestAnimationFrame(markEdges);
+    renderArea(); renderRadius(); renderCount(); renderDate(); renderInd(); renderPresets();
     renderProposal(); renderVisitList(); renderLaterList(); renderBadges();
   }
 
@@ -456,21 +644,23 @@
   // ---------- 検索の実行 ----------
   async function runSearch() {
     const a = state.area;
-    let center;
-    if (a.mode === 'address') {
-      const text = a.address.trim();
-      if (!text) return toast('住所か町名を入力してください');
-      center = await D.geocode(text);
-      if (!center) return toast('場所が見つかりませんでした');
-    } else {
-      if (a.lat == null) return toast('先に現在地を取得してください');
-      center = { lat: a.lat, lng: a.lng };
-    }
-    const radiusM = RADIUS.find((r) => r[0] === state.radius)[2];
+    let center, viewport = null;
     const btn = $('[data-act="run-search"]');
     btn.disabled = true; btn.textContent = '探しています…';
     try {
-      const raw = await D.searchShops({ center, radius: radiusM, date: state.date });
+      if (a.mode === 'address') {
+        const text = a.address.trim();
+        if (!text) return toast('住所か町名を入力してください');
+        center = await D.geocode(text);
+        if (!center) return toast('場所が見つかりませんでした');
+        viewport = center.viewport || null;
+      } else {
+        if (a.lat == null) return toast('先に現在地を取得してください');
+        center = { lat: a.lat, lng: a.lng };
+      }
+      const town = state.radius === 'town';
+      const radiusM = RADIUS.find((r) => r[0] === state.radius)[2];
+      const raw = await D.searchShops({ center, radius: radiusM, town, viewport: town ? viewport : null, industries: [...state.industries] });
       const blocked = new Set(state.blocks.map((b) => b.id));
       state.pool = raw.filter((s) => !blocked.has(s.id)).map(withScores);
       state.snap = {
@@ -484,7 +674,7 @@
       state.expanded = new Set();
       go('proposal');
     } catch (e) {
-      toast('取得に失敗しました。時間をおいてもう一度お試しください');
+      toast(e && e.message ? e.message : '取得に失敗しました。時間をおいてもう一度お試しください');
     } finally {
       btn.disabled = false; btn.textContent = '提案リストを作る';
     }
@@ -528,8 +718,21 @@
     const it = findIn(kind === 'later' ? state.later : state.visit, id);
     if (!it) return;
     dateCb = (d) => setVisitDate(id, d, kind);
-    openSheet('訪問予定日', `${dateStrip(it.visitDate || state.date, 'dpick', `data-id="${id}" data-kind="${kind}"`)}
-      <div class="stack"><button class="btn text wide" data-act="dpick-none" data-id="${id}" data-kind="${kind}">日付未定にする</button></div>`);
+    dateCtx = { id, kind, sel: it.visitDate || state.date };
+    CAL.sheet = null; // 選ばれている日の月から表示
+    CAL_OPEN.sheet = false; // 普段は閉じておく
+    openSheet('訪問予定日', '<div id="dateBody"></div>');
+    renderDateSheet();
+  }
+
+  // 訪問日シートの中身（今日・明日＋カレンダー）
+  function renderDateSheet() {
+    const el = $('#dateBody');
+    if (!el || !dateCtx) return;
+    const { id, kind, sel } = dateCtx;
+    const extra = `data-id="${id}" data-kind="${kind}"`;
+    el.innerHTML = `${calToggleHTML('sheet', sel)}${quickDates(sel, 'dpick', extra)}${CAL_OPEN.sheet ? calHTML('sheet', sel, 'dpick', extra) : ''}
+      <div class="stack"><button class="btn text wide" data-act="dpick-none" data-id="${id}" data-kind="${kind}">日付未定にする</button></div>`;
   }
 
   function setVisitDate(id, date, kind) {
@@ -596,7 +799,19 @@
   }
 
   // ---------- 訪問NG（永久ブロック） ----------
+  // ログインしていない人への案内（訪問NGは、メンバーがログインしたときだけ使える）
+  function openLoginPrompt(message) {
+    openSheet('ログインが必要です', `
+      <p class="sub">${esc(message)}</p>
+      <p class="hint">検索や提案リストは、ログインしなくても使えます。</p>
+      <div class="stack">
+        <button class="btn primary wide" data-act="login-from-sheet">Googleでログイン</button>
+        <button class="btn text wide" data-close>あとで</button>
+      </div>`);
+  }
+
   function openBlockSheet(id) {
+    if (!state.user) return openLoginPrompt('訪問NGの登録には、ログインが必要です。');
     const s = findShop(id);
     if (!s) return;
     openSheet('訪問NGに登録', `<p class="sub">${esc(s.name)}</p>
@@ -618,6 +833,7 @@
   }
 
   async function openBlockList() {
+    if (!state.user) return openLoginPrompt('訪問NGの一覧は、ログインすると見られます。');
     state.blocks = await D.getBlocks();
     const body = state.blocks.length
       ? `<ul class="blist">${state.blocks.map((b) => `<li><div><b>${esc(b.name)}</b><small>${esc(b.reason)}</small></div>
@@ -634,17 +850,33 @@
   }
 
   // ---------- お気に入り条件 ----------
-  function savePreset() {
-    const name = window.prompt('条件の名前（例：〇〇区の寿司店）');
-    if (!name || !name.trim()) return;
-    state.presets.push({
-      name: name.trim(),
+  // いまの検索条件（保存する中身）
+  function currentConditions() {
+    return {
       area: { mode: state.area.mode, address: state.area.address },
       radius: state.radius, count: state.count, industries: [...state.industries],
-    });
+    };
+  }
+
+  // 名前を入力して保存（同じ名前は重ねて保存しない）
+  function savePreset() {
+    openSheet('条件に名前を付けて保存', `
+      <label class="field"><span class="sub">名前（例：渋谷・飲食店）</span>
+        <input id="presetName" type="text" maxlength="20" placeholder="渋谷・飲食店" autocomplete="off"></label>
+      <p class="hint">${esc(presetSummary(currentConditions()))}</p>
+      <div class="stack"><button class="btn primary wide" data-act="preset-save-ok">保存する</button></div>`);
+    setTimeout(() => { const i = $('#presetName'); if (i) i.focus(); }, 60);
+  }
+
+  function confirmSavePreset() {
+    const name = (($('#presetName') || {}).value || '').trim();
+    if (!name) return toast('名前を入力してください');
+    if (state.presets.some((p) => p.name === name)) return toast('同じ名前の条件があります。別の名前にしてください');
+    state.presets.push({ name, ...currentConditions() });
     LS.set('presets', state.presets);
+    closeSheet();
     renderPresets();
-    toast('条件を保存しました');
+    toast(`「${name}」を保存しました`);
   }
 
   function applyPreset(i) {
@@ -659,22 +891,129 @@
   }
 
   function deletePreset(i) {
+    const p = state.presets[i];
+    if (!p) return;
+    if (!window.confirm(`「${p.name}」を削除しますか？`)) return;
     state.presets.splice(i, 1);
     LS.set('presets', state.presets);
     renderPresets();
+    toast('削除しました');
   }
+
+  // ---------- 地図で見る（店の位置を番号つきのピンで並べる） ----------
+  const PIN = '123456789ABCDEFGHIJK'; // 番号（画面の並びと地図のピンが一致する）
+  const SORT_LABEL = { rec: 'おすすめ順', dist: '近い順', rating: '評価順' };
+  let mapKey = '';   // 直前に取得した地図の店の並び（同じなら取り直さない）
+  let mapImgUrl = null; // 地図画像の一時URL
+  let mapReq = 0;
+
+  function mapPanelHTML(list) {
+    if (!list.length) return `<div class="empty"><p>条件に合う店がありませんでした。</p></div>`;
+    return `<div class="map-card">
+      <div class="map-box" id="mapBox"><p class="hint">地図を読み込んでいます…</p></div>
+      <p class="hint">並び順は「${SORT_LABEL[state.pSort]}」です。番号の順に回ると効率的です。</p>
+      <ol class="map-order">${list.map((s, i) => `<li><span class="pin-no">${PIN[i]}</span><span class="map-name">${esc(s.name)}</span><small>${fmtDist(s.distance)}</small></li>`).join('')}</ol>
+    </div>`;
+  }
+
+  async function loadMap(list) {
+    const points = list.map((s) => ({ lat: s.lat, lng: s.lng }));
+    const key = points.map((p) => `${p.lat},${p.lng}`).join('|');
+    const req = ++mapReq;
+    const show = (url) => {
+      const box = $('#mapBox');
+      if (box) box.innerHTML = `<img class="map-img" src="${url}" alt="店の位置の地図（番号は下の一覧と同じ）">`;
+    };
+    if (key === mapKey && mapImgUrl) return show(mapImgUrl); // 同じ店なら取り直さない
+    try {
+      const blob = await D.mapImage(points);
+      if (req !== mapReq) return; // 新しい表示があれば、この結果は捨てる
+      if (mapImgUrl) URL.revokeObjectURL(mapImgUrl);
+      mapImgUrl = URL.createObjectURL(blob);
+      mapKey = key;
+      show(mapImgUrl);
+    } catch (e) {
+      if (req !== mapReq) return;
+      const box = $('#mapBox');
+      if (box) box.innerHTML = `<p class="hint">${esc(e.message)}</p>`;
+    }
+  }
+
+  // ---------- 固定ヘッダーのメニュー ----------
+  function renderMenu() {
+    const u = state.user;
+    $('#menu').innerHTML = `
+      <button class="menu-item" data-act="menu-block">${ic('block')}<span>訪問NG一覧</span><em class="menu-cnt">${state.blocks.length}</em></button>
+      <button class="menu-item" data-act="menu-presets">${ic('target')}<span>お気に入り条件</span></button>
+      <a class="menu-item" href="${SITE_URL}" target="_blank" rel="noopener" data-act="menu-close">${ic('ext')}<span>完了報告アプリへ</span></a>
+      ${u
+        ? `<button class="menu-item" data-act="menu-logout">${ic('x')}<span>ログアウト</span></button>`
+        : `<button class="menu-item" data-act="menu-login">${ic('plus')}<span>Googleでログイン</span></button>`}`;
+  }
+
+  function toggleMenu(force) {
+    const m = $('#menu');
+    const open = typeof force === 'boolean' ? force : m.hidden;
+    if (open) renderMenu();
+    m.hidden = !open;
+    $('.menu-btn').setAttribute('aria-expanded', String(open));
+  }
+  function closeMenu() { toggleMenu(false); }
+
+  // お気に入り条件（検索画面の、お気に入りの場所へ移動する）
+  function goPresets() {
+    go('search');
+    setTimeout(() => {
+      const c = $('#presetCard');
+      // 固定ヘッダー（約58px）の下に、カードの上端を合わせる
+      if (c) window.scrollTo({ top: c.getBoundingClientRect().top + window.scrollY - 76, behavior: 'smooth' });
+    }, 80);
+  }
+
+  document.addEventListener('click', (e) => {
+    const m = $('#menu');
+    if (!m || m.hidden) return;
+    if (!e.target.closest('#menu') && !e.target.closest('#topbar')) closeMenu();
+  });
 
   // ---------- 操作の登録（クリックの委任） ----------
   const ACT = {
+    login: () => login(),
+    logout: () => logout(),
     'area-mode': (el) => { state.area.mode = el.dataset.v; renderArea(); },
     gps: () => locate(() => renderArea()),
     radius: (el) => { state.radius = el.dataset.v; renderRadius(); },
     'count-open': openCountWheel,
     wi: (el) => { const w = $('#wheel'); if (w) w.scrollTo({ top: COUNTS.indexOf(Number(el.dataset.n)) * ITEM_H, behavior: 'smooth' }); },
     'count-ok': () => { state.count = pendingCount; closeSheet(); renderCount(); renderProposal(); },
-    'search-date': (el) => { state.date = el.dataset.date; renderDate(); },
+    'search-date': (el) => { state.date = el.dataset.date; CAL_OPEN.search = false; renderDate(); }, // 選んだら閉じる
+    'cal-toggle': (el) => {
+      const kind = el.dataset.kind;
+      CAL_OPEN[kind] = !CAL_OPEN[kind];
+      if (kind === 'search') renderDate(); else renderDateSheet();
+    },
+    'cal-nav': (el) => {
+      const kind = el.dataset.kind;
+      CAL[kind] = shiftMonth(CAL[kind], Number(el.dataset.d));
+      if (kind === 'search') renderDate(); else renderDateSheet();
+    },
+    menu: () => toggleMenu(),
+    'menu-close': () => closeMenu(),
+    'menu-block': () => { closeMenu(); openBlockList(); },
+    'login-from-sheet': () => { closeSheet(); login(); },
+    'menu-presets': () => { closeMenu(); goPresets(); },
+    'menu-logout': () => { closeMenu(); logout(); },
+    'menu-login': () => { closeMenu(); login(); },
+    'p-view': (el) => { state.pView = el.dataset.v; renderProposal(); },
+    'preset-save-ok': () => confirmSavePreset(),
     'ind-tab': (el) => { state.indTab = Number(el.dataset.i); renderInd(); },
     ind: (el) => { const n = el.dataset.name; state.industries.has(n) ? state.industries.delete(n) : state.industries.add(n); renderInd(); },
+    'ind-all': () => {
+      const everyIndustry = D.GROUPS.every((gr) => gr.items.every((n) => state.industries.has(n)));
+      state.industries.clear();
+      if (!everyIndustry) D.GROUPS.forEach((gr) => gr.items.forEach((n) => state.industries.add(n)));
+      renderInd();
+    },
     'ind-group': () => {
       const g = D.GROUPS[state.indTab].items;
       const all = g.every((n) => state.industries.has(n));
@@ -728,11 +1067,11 @@
   // ---------- 起動 ----------
   async function init() {
     renderNav();
-    state.blocks = await D.getBlocks();
     const note = $('#demoNote');
     if (note) note.hidden = !D.isSample;
     renderAll();
     showScreen();
+    await refreshUser(); // 画面は先に出し、ログイン状態は後から反映する
   }
   init();
 })();
