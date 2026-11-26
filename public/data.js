@@ -172,6 +172,29 @@
       return listBlocks();
     },
 
+    // 提案の地図画像（PNG）。店の位置を番号つきのピンで並べたもの。APIキーはサーバーの中だけ
+    async mapImage(points) {
+      const u = await currentUser();
+      if (!u) throw new Error('先にログインしてください');
+      const token = await u.getIdToken();
+      let res;
+      try {
+        res = await fetch('/api/map', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ points }),
+        });
+      } catch (e) {
+        throw new Error('通信できませんでした。電波の良いところでもう一度お試しください');
+      }
+      if (!res.ok) {
+        let j = {};
+        try { j = await res.json(); } catch (e) { /* 空の応答 */ }
+        throw new Error(j.error || '地図を取得できませんでした');
+      }
+      return res.blob();
+    },
+
     // ログイン（画面のボタンから呼ぶ）
     signIn,
     signOut,

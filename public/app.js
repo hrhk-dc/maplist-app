@@ -54,6 +54,7 @@
     gps: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>',
     block: '<circle cx="12" cy="12" r="8.5"/><path d="M6 18L18 6"/>',
     back: '<path d="M15 6l-6 6 6 6"/>',
+    next: '<path d="M9 6l6 6-6 6"/>',
     ext: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   };
   const ic = (name, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
@@ -171,6 +172,7 @@
     pool: [],                // 検索で取得した候補（おすすめ点つき）
     snap: null,              // 検索時の条件（提案画面の要約用）
     pSort: 'rec',
+    pView: 'list',           // 提案の表示：一覧（list）か地図（map）
     pIndustries: new Set(),  // 提案画面の業種絞り込み（空＝全業種）
     openOnly: true,
     expanded: new Set(),
@@ -209,6 +211,67 @@
     }).join('')}</div>`;
   }
 
+  // ---------- 日付：今日・明日＋カレンダー（月をまたいで選べる） ----------
+  // 選べる範囲：2日前〜120日先（JST）
+  const DATE_MIN = () => addDays(todayJst(), -2);
+  const DATE_MAX = () => addDays(todayJst(), 120);
+  const CAL = { search: null, sheet: null }; // 表示中の月（YYYY-MM）
+  let dateCtx = null;                        // 訪問日シートの対象 {id, kind, sel}
+
+  function shiftMonth(ym, d) {
+    const [y, m] = ym.split('-').map(Number);
+    return ymdOf(new Date(Date.UTC(y, m - 1 + d, 1))).slice(0, 7);
+  }
+
+  // 今日・明日のボタン（選ばれている日は縁を光らせる）
+  function quickDates(sel, act, extra = '') {
+    const t = todayJst();
+    return `<div class="quick">${[['今日', t], ['明日', addDays(t, 1)]].map(([l, d]) =>
+      `<button class="pill-btn${d === sel ? ' on' : ''}" data-act="${act}" data-date="${d}" ${extra}>${l}　${Number(d.slice(5, 7))}/${Number(d.slice(8))}</button>`).join('')}</div>`;
+  }
+
+  // カレンダー（kind は 'search' か 'sheet'）
+  function calHTML(kind, sel, act, extra = '') {
+    const min = DATE_MIN(), max = DATE_MAX(), t = todayJst();
+    if (!CAL[kind]) CAL[kind] = (sel || t).slice(0, 7);
+    const ym = CAL[kind];
+    const [y, m] = ym.split('-').map(Number);
+    const last = ymdOf(new Date(Date.UTC(y, m, 0)));
+    const prevOk = last >= min;
+    const nextOk = addDays(last, 1) <= max;
+    let cells = '';
+    for (let i = 0; i < wdOf(`${ym}-01`); i++) cells += '<span></span>';
+    for (let day = 1; day <= Number(last.slice(8)); day++) {
+      const d = `${ym}-${pad(day)}`;
+      const off = d < min || d > max;
+      cells += `<button class="cal-day${d === sel ? ' on' : ''}${d === t ? ' today' : ''}" data-act="${act}" data-date="${d}" ${extra}${off ? ' disabled' : ''} aria-label="${fmtDate(d)}">${day}</button>`;
+    }
+    return `<div class="cal">
+      <div class="cal-head">
+        <button class="icon-btn cal-nav" data-act="cal-nav" data-kind="${kind}" data-d="-1" ${prevOk ? '' : 'disabled'} aria-label="前の月">${ic('back')}</button>
+        <b>${y}年${m}月</b>
+        <button class="icon-btn cal-nav" data-act="cal-nav" data-kind="${kind}" data-d="1" ${nextOk ? '' : 'disabled'} aria-label="次の月">${ic('next')}</button>
+      </div>
+      <div class="cal-grid">${WD_JP.map((w) => `<span class="cal-wd">${w}</span>`).join('')}${cells}</div>
+    </div>`;
+  }
+
+  // 横にスクロールする行の端に、続きがある合図（グラデーション）を出す
+  function markEdges() {
+    $$('.hscroll').forEach((el) => {
+      const w = el.parentElement;
+      if (!w) return;
+      const max = el.scrollWidth - el.clientWidth;
+      w.classList.toggle('edge-l', el.scrollLeft > 4);
+      w.classList.toggle('edge-r', max > 4 && el.scrollLeft < max - 4);
+    });
+  }
+  document.addEventListener('scroll', (e) => {
+    if (e.target && e.target.classList && e.target.classList.contains('hscroll')) markEdges();
+  }, true);
+  window.addEventListener('resize', markEdges);
+
+  // （旧）日付チップ行。新しい日付の表示では使わない
   function dateStrip(sel, act, extra = '') {
     const t = todayJst();
     let h = '';
@@ -274,8 +337,8 @@
   }
 
   function renderRadius() {
-    $('#s-radius').innerHTML = `<div class="seg scroll">${RADIUS.map(([k, l]) =>
-      `<button class="${state.radius === k ? 'on' : ''}" data-act="radius" data-v="${k}">${l}</button>`).join('')}</div>`;
+    $('#s-radius').innerHTML = `<div class="hwrap"><div class="seg scroll hscroll">${RADIUS.map(([k, l]) =>
+      `<button class="${state.radius === k ? 'on' : ''}" data-act="radius" data-v="${k}">${l}</button>`).join('')}</div></div>`;
   }
 
   function renderCount() {
@@ -284,9 +347,7 @@
 
   function renderDate() {
     const el = $('#s-date');
-    el.innerHTML = `<p class="date-now">訪問する日：<b>${fmtDate(state.date)}</b></p>${dateStrip(state.date, 'search-date')}`;
-    const on = $('.dchip.on', el);
-    if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+    el.innerHTML = `<p class="date-now">訪問する日：<b>${fmtDate(state.date)}</b></p>${quickDates(state.date, 'search-date')}${calHTML('search', state.date, 'search-date')}`;
   }
 
   function renderInd() {
@@ -305,18 +366,33 @@
       allBtn.classList.toggle('on', everyIndustry);
     }
     $('#s-ind').innerHTML = `
-      <div class="htabs" role="tablist">${tabs}</div>
+      <div class="hwrap"><div class="htabs hscroll" role="tablist">${tabs}</div></div>
       <div class="ind-head"><span class="sub">${esc(g.name)}（${g.items.length}業種）</span>
         <button class="pill-btn${all ? ' on' : ''}" data-act="ind-group">${all ? 'まるごと解除' : 'まるごと選択'}</button></div>
       <div class="chips">${g.items.map((n) => `<button class="chip${state.industries.has(n) ? ' on' : ''}" data-act="ind" data-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>
       <p class="hint">${state.industries.size ? `選択中 ${state.industries.size}業種` : '未選択なら全業種が対象です'}</p>`;
   }
 
+  // 条件の中身を一行で（一覧の説明文）
+  function presetSummary(p) {
+    const place = p.area && p.area.mode === 'gps' ? '現在地' : ((p.area && p.area.address) || '住所未入力');
+    const rad = RADIUS.find((r) => r[0] === p.radius);
+    const inds = (p.industries || []).length ? `${p.industries.length}業種` : '全業種';
+    return `${place}・${rad ? rad[1] : p.radius}・${p.count}件・${inds}`;
+  }
+
   function renderPresets() {
-    const chips = state.presets.map((p, i) =>
-      `<span class="chip preset"><button data-act="preset-apply" data-i="${i}">${esc(p.name)}</button><button class="x" data-act="preset-del" data-i="${i}" aria-label="削除">${ic('x')}</button></span>`).join('');
-    $('#s-presets').innerHTML = `<div class="chips">${chips || '<p class="hint">よく使う条件を保存できます</p>'}</div>
-      <div class="stack-row"><button class="btn small" data-act="preset-save">今の条件を保存</button></div>`;
+    const rows = state.presets.map((p, i) => `
+      <li class="prow">
+        <button class="prow-main" data-act="preset-apply" data-i="${i}">
+          <b>${esc(p.name)}</b><small>${esc(presetSummary(p))}</small>
+        </button>
+        <button class="btn small danger" data-act="preset-del" data-i="${i}" aria-label="${esc(p.name)}を削除">${ic('x')}削除</button>
+      </li>`).join('');
+    $('#s-presets').innerHTML = `${rows
+      ? `<ul class="plist">${rows}</ul>`
+      : '<p class="hint">よく使う条件を、名前を付けて保存できます（例：渋谷・飲食店）</p>'}
+      <div class="stack-row"><button class="btn small" data-act="preset-save">今の条件に名前を付けて保存</button></div>`;
   }
 
   function renderSearchBlocks() {
@@ -336,6 +412,7 @@
     if (!sn) {
       $('#pSummary').textContent = 'まだ提案がありません。';
       $('#pSort').innerHTML = '';
+      $('#pView').innerHTML = '';
       $('#pInd').innerHTML = '';
       $('#pOpenLabel').textContent = '';
       $('#pList').innerHTML = `<div class="empty"><p>まだ提案がありません。</p><button class="btn primary" data-act="go-search">条件を決める</button></div>`;
@@ -344,6 +421,8 @@
     $('#pSummary').textContent = `${sn.area}／半径 ${sn.radius}／${sn.count}件／訪問日 ${fmtDate(state.date)}／${sn.industry}`;
     $('#pSort').innerHTML = [['rec', 'おすすめ順'], ['dist', '近い順'], ['rating', '評価順']].map(([k, l]) =>
       `<button class="${state.pSort === k ? 'on' : ''}" data-act="p-sort" data-v="${k}">${l}</button>`).join('');
+    $('#pView').innerHTML = [['list', '一覧'], ['map', '地図で見る']].map(([k, l]) =>
+      `<button class="${state.pView === k ? 'on' : ''}" data-act="p-view" data-v="${k}">${l}</button>`).join('');
 
     const inds = [...new Set(state.pool.map((s) => s.industry))];
     $('#pInd').innerHTML = inds.map((n) => `<button class="chip${state.pIndustries.has(n) ? ' on' : ''}" data-act="p-ind" data-name="${esc(n)}">${esc(n)}</button>`).join('')
@@ -354,6 +433,11 @@
     sw.setAttribute('aria-checked', String(state.openOnly));
 
     const list = visibleList();
+    if (state.pView === 'map') {
+      $('#pList').innerHTML = mapPanelHTML(list);
+      loadMap(list);
+      return;
+    }
     $('#pList').innerHTML = list.length
       ? list.map((s, i) => proposalCard(s, i + 1)).join('')
       : `<div class="empty"><p>条件に合う店がありませんでした。</p><p class="hint">半径を広げるか、条件を変えてもう一度お試しください。</p></div>`;
@@ -530,6 +614,8 @@
 
   function renderAll() {
     renderAccount();
+    if (!$('#menu').hidden) renderMenu();
+    requestAnimationFrame(markEdges);
     renderArea(); renderRadius(); renderCount(); renderDate(); renderInd(); renderPresets(); renderSearchBlocks();
     renderProposal(); renderVisitList(); renderLaterList(); renderBadges();
   }
@@ -629,8 +715,20 @@
     const it = findIn(kind === 'later' ? state.later : state.visit, id);
     if (!it) return;
     dateCb = (d) => setVisitDate(id, d, kind);
-    openSheet('訪問予定日', `${dateStrip(it.visitDate || state.date, 'dpick', `data-id="${id}" data-kind="${kind}"`)}
-      <div class="stack"><button class="btn text wide" data-act="dpick-none" data-id="${id}" data-kind="${kind}">日付未定にする</button></div>`);
+    dateCtx = { id, kind, sel: it.visitDate || state.date };
+    CAL.sheet = null; // 選ばれている日の月から表示
+    openSheet('訪問予定日', '<div id="dateBody"></div>');
+    renderDateSheet();
+  }
+
+  // 訪問日シートの中身（今日・明日＋カレンダー）
+  function renderDateSheet() {
+    const el = $('#dateBody');
+    if (!el || !dateCtx) return;
+    const { id, kind, sel } = dateCtx;
+    const extra = `data-id="${id}" data-kind="${kind}"`;
+    el.innerHTML = `${quickDates(sel, 'dpick', extra)}${calHTML('sheet', sel, 'dpick', extra)}
+      <div class="stack"><button class="btn text wide" data-act="dpick-none" data-id="${id}" data-kind="${kind}">日付未定にする</button></div>`;
   }
 
   function setVisitDate(id, date, kind) {
@@ -735,17 +833,33 @@
   }
 
   // ---------- お気に入り条件 ----------
-  function savePreset() {
-    const name = window.prompt('条件の名前（例：〇〇区の寿司店）');
-    if (!name || !name.trim()) return;
-    state.presets.push({
-      name: name.trim(),
+  // いまの検索条件（保存する中身）
+  function currentConditions() {
+    return {
       area: { mode: state.area.mode, address: state.area.address },
       radius: state.radius, count: state.count, industries: [...state.industries],
-    });
+    };
+  }
+
+  // 名前を入力して保存（同じ名前は重ねて保存しない）
+  function savePreset() {
+    openSheet('条件に名前を付けて保存', `
+      <label class="field"><span class="sub">名前（例：渋谷・飲食店）</span>
+        <input id="presetName" type="text" maxlength="20" placeholder="渋谷・飲食店" autocomplete="off"></label>
+      <p class="hint">${esc(presetSummary(currentConditions()))}</p>
+      <div class="stack"><button class="btn primary wide" data-act="preset-save-ok">保存する</button></div>`);
+    setTimeout(() => { const i = $('#presetName'); if (i) i.focus(); }, 60);
+  }
+
+  function confirmSavePreset() {
+    const name = (($('#presetName') || {}).value || '').trim();
+    if (!name) return toast('名前を入力してください');
+    if (state.presets.some((p) => p.name === name)) return toast('同じ名前の条件があります。別の名前にしてください');
+    state.presets.push({ name, ...currentConditions() });
     LS.set('presets', state.presets);
+    closeSheet();
     renderPresets();
-    toast('条件を保存しました');
+    toast(`「${name}」を保存しました`);
   }
 
   function applyPreset(i) {
@@ -760,10 +874,90 @@
   }
 
   function deletePreset(i) {
+    const p = state.presets[i];
+    if (!p) return;
+    if (!window.confirm(`「${p.name}」を削除しますか？`)) return;
     state.presets.splice(i, 1);
     LS.set('presets', state.presets);
     renderPresets();
+    toast('削除しました');
   }
+
+  // ---------- 地図で見る（店の位置を番号つきのピンで並べる） ----------
+  const PIN = '123456789ABCDEFGHIJK'; // 番号（画面の並びと地図のピンが一致する）
+  const SORT_LABEL = { rec: 'おすすめ順', dist: '近い順', rating: '評価順' };
+  let mapKey = '';   // 直前に取得した地図の店の並び（同じなら取り直さない）
+  let mapImgUrl = null; // 地図画像の一時URL
+  let mapReq = 0;
+
+  function mapPanelHTML(list) {
+    if (!list.length) return `<div class="empty"><p>条件に合う店がありませんでした。</p></div>`;
+    return `<div class="map-card">
+      <div class="map-box" id="mapBox"><p class="hint">地図を読み込んでいます…</p></div>
+      <p class="hint">並び順は「${SORT_LABEL[state.pSort]}」です。番号の順に回ると効率的です。</p>
+      <ol class="map-order">${list.map((s, i) => `<li><span class="pin-no">${PIN[i]}</span><span class="map-name">${esc(s.name)}</span><small>${fmtDist(s.distance)}</small></li>`).join('')}</ol>
+    </div>`;
+  }
+
+  async function loadMap(list) {
+    const points = list.map((s) => ({ lat: s.lat, lng: s.lng }));
+    const key = points.map((p) => `${p.lat},${p.lng}`).join('|');
+    const req = ++mapReq;
+    const show = (url) => {
+      const box = $('#mapBox');
+      if (box) box.innerHTML = `<img class="map-img" src="${url}" alt="店の位置の地図（番号は下の一覧と同じ）">`;
+    };
+    if (key === mapKey && mapImgUrl) return show(mapImgUrl); // 同じ店なら取り直さない
+    try {
+      const blob = await D.mapImage(points);
+      if (req !== mapReq) return; // 新しい表示があれば、この結果は捨てる
+      if (mapImgUrl) URL.revokeObjectURL(mapImgUrl);
+      mapImgUrl = URL.createObjectURL(blob);
+      mapKey = key;
+      show(mapImgUrl);
+    } catch (e) {
+      if (req !== mapReq) return;
+      const box = $('#mapBox');
+      if (box) box.innerHTML = `<p class="hint">${esc(e.message)}</p>`;
+    }
+  }
+
+  // ---------- 固定ヘッダーのメニュー ----------
+  function renderMenu() {
+    const u = state.user;
+    $('#menu').innerHTML = `
+      <button class="menu-item" data-act="menu-block">${ic('block')}<span>訪問NG一覧</span><em class="menu-cnt">${state.blocks.length}</em></button>
+      <button class="menu-item" data-act="menu-presets">${ic('target')}<span>お気に入り条件</span></button>
+      <a class="menu-item" href="${SITE_URL}" target="_blank" rel="noopener" data-act="menu-close">${ic('ext')}<span>完了報告アプリへ</span></a>
+      ${u
+        ? `<button class="menu-item" data-act="menu-logout">${ic('x')}<span>ログアウト</span></button>`
+        : `<button class="menu-item" data-act="menu-login">${ic('plus')}<span>Googleでログイン</span></button>`}`;
+  }
+
+  function toggleMenu(force) {
+    const m = $('#menu');
+    const open = typeof force === 'boolean' ? force : m.hidden;
+    if (open) renderMenu();
+    m.hidden = !open;
+    $('.menu-btn').setAttribute('aria-expanded', String(open));
+  }
+  function closeMenu() { toggleMenu(false); }
+
+  // お気に入り条件（検索画面の、お気に入りの場所へ移動する）
+  function goPresets() {
+    go('search');
+    setTimeout(() => {
+      const c = $('#presetCard');
+      // 固定ヘッダー（約58px）の下に、カードの上端を合わせる
+      if (c) window.scrollTo({ top: c.getBoundingClientRect().top + window.scrollY - 76, behavior: 'smooth' });
+    }, 80);
+  }
+
+  document.addEventListener('click', (e) => {
+    const m = $('#menu');
+    if (!m || m.hidden) return;
+    if (!e.target.closest('#menu') && !e.target.closest('#topbar')) closeMenu();
+  });
 
   // ---------- 操作の登録（クリックの委任） ----------
   const ACT = {
@@ -776,6 +970,19 @@
     wi: (el) => { const w = $('#wheel'); if (w) w.scrollTo({ top: COUNTS.indexOf(Number(el.dataset.n)) * ITEM_H, behavior: 'smooth' }); },
     'count-ok': () => { state.count = pendingCount; closeSheet(); renderCount(); renderProposal(); },
     'search-date': (el) => { state.date = el.dataset.date; renderDate(); },
+    'cal-nav': (el) => {
+      const kind = el.dataset.kind;
+      CAL[kind] = shiftMonth(CAL[kind], Number(el.dataset.d));
+      if (kind === 'search') renderDate(); else renderDateSheet();
+    },
+    menu: () => toggleMenu(),
+    'menu-close': () => closeMenu(),
+    'menu-block': () => { closeMenu(); openBlockList(); },
+    'menu-presets': () => { closeMenu(); goPresets(); },
+    'menu-logout': () => { closeMenu(); logout(); },
+    'menu-login': () => { closeMenu(); login(); },
+    'p-view': (el) => { state.pView = el.dataset.v; renderProposal(); },
+    'preset-save-ok': () => confirmSavePreset(),
     'ind-tab': (el) => { state.indTab = Number(el.dataset.i); renderInd(); },
     ind: (el) => { const n = el.dataset.name; state.industries.has(n) ? state.industries.delete(n) : state.industries.add(n); renderInd(); },
     'ind-all': () => {

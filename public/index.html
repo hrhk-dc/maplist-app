@@ -16,6 +16,15 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <!-- 全画面共通の固定ヘッダー（右上の三本線でメニューを開く） -->
+  <header class="topbar" id="topbar">
+    <span class="brand">訪問リスト</span>
+    <button class="icon-btn menu-btn" data-act="menu" aria-label="メニュー" aria-expanded="false" aria-controls="menu">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </header>
+  <nav class="menu" id="menu" hidden aria-label="メニュー項目"></nav>
+
   <main id="app">
 
     <!-- 検索 -->
@@ -37,7 +46,7 @@
         <div class="row-between sec-row"><h2 class="sec">業種</h2><button class="pill-btn" id="allInd" data-act="ind-all">全て</button></div>
         <div id="s-ind"></div>
       </div>
-      <div class="card"><h2 class="sec">お気に入り条件</h2><div id="s-presets"></div></div>
+      <div class="card" id="presetCard"><h2 class="sec">お気に入り条件</h2><div id="s-presets"></div></div>
       <div class="card"><button class="btn wide" data-act="block-list" id="blockBtn">訪問NGの店</button></div>
 
       <div class="dock"><button class="btn primary wide" data-act="run-search">提案リストを作る</button></div>
@@ -50,6 +59,7 @@
         <p class="summary" id="pSummary"></p>
       </header>
       <div class="seg" id="pSort" role="tablist"></div>
+      <div class="seg two view-seg" id="pView" role="tablist"></div>
       <div class="card"><h2 class="sec">業種で絞り込み</h2><div class="chips" id="pInd"></div></div>
       <div class="card row-between">
         <span id="pOpenLabel"></span>

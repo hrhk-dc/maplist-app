@@ -35,6 +35,11 @@
 
 キーが無いと、検索画面に「店舗検索の設定がまだです」と出ます。
 
+### 地図で見る（Maps Static API）
+- 提案の「地図で見る」は、サーバー（`functions/api/map.js`）が同じ `GOOGLE_MAPS_API_KEY` で地図の画像を作って返します。キーは画面にもレスポンスにも出ません。
+- キーの「APIの制限」に **Maps Static API** を追加してください（許可されていないと「地図を取得できませんでした」と出ます）。
+- 地図の画像は、ログインしたメンバーだけが見られます。
+
 ## 3. ログインの窓口（Firebase Authentication）
 
 - Firebase コンソール（`dc-report-8e1d1`）→ Authentication → 設定 → **承認済みのドメイン** に `visit-list-app.pages.dev` を追加する。
