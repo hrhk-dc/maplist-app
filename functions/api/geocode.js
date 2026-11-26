@@ -1,13 +1,15 @@
 // 住所・町名 → 座標（Cloudflare Pages Functions：POST /api/geocode）
-// ログインしたメンバーだけ使える。町名の範囲（viewport）も返す。
-import { verifyMember, keyOf, geocodeText } from "../../lib/vla-core.js";
+// ログイン不要。1つのIPからの連続した大量リクエストは回数制限で止める（1分に30回まで）。
+// 町名の範囲（viewport）も返す。
+import { keyOf, geocodeText } from "../../lib/vla-core.js";
+import { hitLimit, clientIp, tooMany } from "../../lib/rate-limit.js";
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
 
 export async function onRequestPost({ request, env }) {
-  const who = await verifyMember(request);
-  if (!who.ok) return json({ ok: false, error: who.error }, who.status);
+  const lim = hitLimit(`geocode:${clientIp(request)}`, 30, 60_000);
+  if (!lim.ok) return tooMany(lim.retryAfter);
 
   const key = keyOf(env);
   if (!key) return json({ ok: false, error: "住所の検索の設定がまだです（管理者がAPIキーを設定してください）" }, 503);

@@ -80,8 +80,8 @@
     await f.authM.signOut(f.auth);
   }
 
-  // サーバーへの通信（ログインのIDトークンを付ける）
-  // 検索・住所変換は、ログインしていなくても使える（ログインしていれば、トークンを付ける）
+  // サーバーへの通信（ログイン不要。サーバー側でIPごとの回数制限をかけている）
+  // ログインしていれば、トークンを付ける（付けなくても検索できる）
   async function api(path, body) {
     const u = await currentUser();
     const headers = { 'Content-Type': 'application/json' };
@@ -103,7 +103,16 @@
   }
 
   // ---------- 訪問NG（vla_blocks） ----------
+  // ログイン中：Firestore（vla_blocks）。未ログイン：この端末の中だけに保存する
   const blockOf = (d) => ({ id: d.id, name: d.name || '', reason: d.reason || '', at: d.at || 0 });
+
+  function localBlocks() {
+    try { const v = JSON.parse(localStorage.getItem(LOCAL_BLOCKS) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+  }
+  function saveLocalBlocks(list) {
+    try { localStorage.setItem(LOCAL_BLOCKS, JSON.stringify(list)); } catch (e) { /* 保存できない端末では無視 */ }
+    return list;
+  }
 
   // 以前の端末内データを一度だけ Firestore に移す
   async function migrateLocal(f, u) {
@@ -122,7 +131,7 @@
   async function listBlocks() {
     const f = await firebase();
     const u = await currentUser();
-    if (!u) return []; // 未ログインの間は空（ログイン後に一覧を開き直すと出る）
+    if (!u) return localBlocks(); // 未ログインは、この端末の中の一覧
     await migrateLocal(f, u);
     const snap = await f.fsM.getDocs(f.fsM.collection(f.db, BLOCKS));
     return snap.docs.map((d) => blockOf({ id: d.id, ...d.data() }));
@@ -151,14 +160,18 @@
       return { lat: j.lat, lng: j.lng, label: j.label, viewport: j.viewport || null };
     },
 
-    // 訪問NG（完了報告アプリと同じ Firebase。ログインした人の権限で読み書き）
+    // 訪問NG。ログイン中は Firebase（完了報告アプリと同じ）、未ログインはこの端末の中だけ
     async getBlocks() {
       return listBlocks();
     },
     async addBlock(block) {
       const f = await firebase();
       const u = await currentUser();
-      if (!u) throw new Error('先にログインしてください');
+      if (!u) {
+        const list = localBlocks().filter((b) => String(b.id) !== String(block.id));
+        list.push({ id: String(block.id), name: block.name || '', reason: block.reason || '', at: block.at || Date.now() });
+        return saveLocalBlocks(list);
+      }
       await f.fsM.setDoc(f.fsM.doc(f.db, BLOCKS, String(block.id)), {
         name: block.name || '', reason: block.reason || '', at: block.at || Date.now(),
         createdBy: u.uid, createdByName: u.displayName || '',
@@ -168,7 +181,7 @@
     async removeBlock(id) {
       const f = await firebase();
       const u = await currentUser();
-      if (!u) throw new Error('先にログインしてください');
+      if (!u) return saveLocalBlocks(localBlocks().filter((b) => String(b.id) !== String(id)));
       await f.fsM.deleteDoc(f.fsM.doc(f.db, BLOCKS, String(id)));
       return listBlocks();
     },

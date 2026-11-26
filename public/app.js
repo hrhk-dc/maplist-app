@@ -592,8 +592,7 @@
     }
     if (mine !== userSeq) return; // より新しい読み直しがあれば、この結果は捨てる
     state.user = user;
-    state.blocks = state.user ? await D.getBlocks() : [];
-    if (!state.user) { state.pool = []; state.snap = null; }
+    state.blocks = await D.getBlocks(); // 未ログインでも、この端末の訪問NGを使う
     renderAll();
   }
 
