@@ -361,7 +361,7 @@
 
   function overallDetail(s) {
     const rows = KEYS.map((k) => `<tr><td>${LABEL[k]}</td><td>${s.sub[k]}点・重み${Math.round(W[k] * 100)}%</td><td>${(s.sub[k] * W[k]).toFixed(2)}</td></tr>`).join('');
-    return `<div class="detail"><p class="detail-title">総合おすすめ度の計算</p>
+    return `<div class="detail"><p class="detail-title">点数の計算</p>
       <table class="calc">${rows}
         <tr class="sum"><td>合計（5点満点）</td><td></td><td>${s.total5.toFixed(2)}</td></tr>
         <tr class="sum"><td>10点満点にする</td><td>2倍</td><td>${s.overall.toFixed(1)}</td></tr>
@@ -387,7 +387,7 @@
       ${banner}
       <div class="shop-head">
         <span class="rank">${rank}位</span><span class="tag">${esc(s.industry)}</span>
-        <button class="overall${exp('overall') ? ' open' : ''}" data-act="p-expand" data-id="${s.id}" data-k="overall" aria-label="総合おすすめ度 ${s.overall.toFixed(1)}点（詳しく見る）"><b>${s.overall.toFixed(1)}</b><small>/ 10</small></button>
+        <button class="overall${exp('overall') ? ' open' : ''}" data-act="p-expand" data-id="${s.id}" data-k="overall" aria-label="${s.overall.toFixed(1)}点（詳しく見る）"><b>${s.overall.toFixed(1)}</b><small>/ 10</small></button>
       </div>
       <h3 class="shop-name">${esc(s.name)}</h3>
       ${exp('overall') ? overallDetail(s) : ''}
