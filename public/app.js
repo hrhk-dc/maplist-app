@@ -644,7 +644,6 @@
 
   // ---------- 検索の実行 ----------
   async function runSearch() {
-    if (!state.user) return toast('先にログインしてください');
     const a = state.area;
     let center, viewport = null;
     const btn = $('[data-act="run-search"]');
@@ -801,7 +800,19 @@
   }
 
   // ---------- 訪問NG（永久ブロック） ----------
+  // ログインしていない人への案内（訪問NGは、メンバーがログインしたときだけ使える）
+  function openLoginPrompt(message) {
+    openSheet('ログインが必要です', `
+      <p class="sub">${esc(message)}</p>
+      <p class="hint">検索や提案リストは、ログインしなくても使えます。</p>
+      <div class="stack">
+        <button class="btn primary wide" data-act="login-from-sheet">Googleでログイン</button>
+        <button class="btn text wide" data-close>あとで</button>
+      </div>`);
+  }
+
   function openBlockSheet(id) {
+    if (!state.user) return openLoginPrompt('訪問NGの登録には、ログインが必要です。');
     const s = findShop(id);
     if (!s) return;
     openSheet('訪問NGに登録', `<p class="sub">${esc(s.name)}</p>
@@ -823,6 +834,7 @@
   }
 
   async function openBlockList() {
+    if (!state.user) return openLoginPrompt('訪問NGの一覧は、ログインすると見られます。');
     state.blocks = await D.getBlocks();
     const body = state.blocks.length
       ? `<ul class="blist">${state.blocks.map((b) => `<li><div><b>${esc(b.name)}</b><small>${esc(b.reason)}</small></div>
@@ -989,6 +1001,7 @@
     menu: () => toggleMenu(),
     'menu-close': () => closeMenu(),
     'menu-block': () => { closeMenu(); openBlockList(); },
+    'login-from-sheet': () => { closeSheet(); login(); },
     'menu-presets': () => { closeMenu(); goPresets(); },
     'menu-logout': () => { closeMenu(); logout(); },
     'menu-login': () => { closeMenu(); login(); },

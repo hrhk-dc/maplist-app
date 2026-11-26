@@ -81,15 +81,16 @@
   }
 
   // サーバーへの通信（ログインのIDトークンを付ける）
+  // 検索・住所変換は、ログインしていなくても使える（ログインしていれば、トークンを付ける）
   async function api(path, body) {
     const u = await currentUser();
-    if (!u) throw new Error('先にログインしてください');
-    const token = await u.getIdToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (u) headers.Authorization = 'Bearer ' + (await u.getIdToken());
     let res;
     try {
       res = await fetch(path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        headers,
         body: JSON.stringify(body),
       });
     } catch (e) {
@@ -175,13 +176,13 @@
     // 提案の地図画像（PNG）。店の位置を番号つきのピンで並べたもの。APIキーはサーバーの中だけ
     async mapImage(points) {
       const u = await currentUser();
-      if (!u) throw new Error('先にログインしてください');
-      const token = await u.getIdToken();
+      const headers = { 'Content-Type': 'application/json' };
+      if (u) headers.Authorization = 'Bearer ' + (await u.getIdToken());
       let res;
       try {
         res = await fetch('/api/map', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          headers,
           body: JSON.stringify({ points }),
         });
       } catch (e) {
