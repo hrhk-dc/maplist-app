@@ -976,6 +976,24 @@
     if (!e.target.closest('#menu') && !e.target.closest('#topbar')) closeMenu();
   });
 
+  // ---------- 下のタブ：下にスクロールするとゆっくり隠れ、上にスクロールするとゆっくり出る ----------
+  let tabsLastY = window.scrollY;
+  let tabsRaf = 0;
+  function updateTabsVisibility() {
+    tabsRaf = 0;
+    const tabs = $('#nav');
+    if (!tabs) return;
+    const y = Math.max(0, window.scrollY);
+    const dy = y - tabsLastY;
+    if (y < 8) tabs.classList.remove('hide');       // 一番上では必ず出す
+    else if (dy > 6) tabs.classList.add('hide');    // 下へスクロール：隠す
+    else if (dy < -6) tabs.classList.remove('hide'); // 上へスクロール：出す
+    if (Math.abs(dy) > 6) tabsLastY = y;
+  }
+  window.addEventListener('scroll', () => {
+    if (!tabsRaf) tabsRaf = requestAnimationFrame(updateTabsVisibility);
+  }, { passive: true });
+
   // ---------- 操作の登録（クリックの委任） ----------
   const ACT = {
     login: () => login(),
@@ -1031,8 +1049,16 @@
     'p-ind': (el) => { const n = el.dataset.name; state.pIndustries.has(n) ? state.pIndustries.delete(n) : state.pIndustries.add(n); renderProposal(); },
     'open-only': () => { state.openOnly = !state.openOnly; renderProposal(); },
     'p-expand': (el) => {
-      const key = el.dataset.id + ':' + el.dataset.k;
-      state.expanded.has(key) ? state.expanded.delete(key) : state.expanded.add(key);
+      const id = el.dataset.id, k = el.dataset.k;
+      const key = id + ':' + k;
+      if (k === 'overall') {
+        state.expanded.has(key) ? state.expanded.delete(key) : state.expanded.add(key);
+      } else {
+        // 内訳は1つだけ開く：別の項目を押したら、今開いている方は閉じる
+        const wasOpen = state.expanded.has(key);
+        KEYS.forEach((x) => state.expanded.delete(id + ':' + x));
+        if (!wasOpen) state.expanded.add(key);
+      }
       renderProposal();
     },
     add: (el) => addVisit(el.dataset.id),
