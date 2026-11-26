@@ -1,0 +1,10 @@
+{
+  "name": "訪問リストアプリ",
+  "short_name": "訪問リスト",
+  "start_url": "/#search",
+  "display": "standalone",
+  "background_color": "#0B0D12",
+  "theme_color": "#0B0D12",
+  "lang": "ja",
+  "icons": []
+}

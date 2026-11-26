@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0B0D12">
+  <meta name="description" content="ウェブサイトが載っていない店だけを、営業しやすさまで見ておすすめ順に並べます。">
+  <title>訪問リストアプリ</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main id="app">
+
+    <!-- 検索 -->
+    <section class="screen" data-screen="search" aria-label="検索">
+      <header class="hero">
+        <h1>訪問リストアプリ</h1>
+        <p class="lead">ウェブサイトが載っていない店だけを、営業しやすさまで見ておすすめ順に並べます。（チェーン店は除外）</p>
+        <p class="demo-note" id="demoNote">表示中はサンプルデータです（API未接続）</p>
+      </header>
+
+      <div class="card"><h2 class="sec">エリア</h2><div id="s-area"></div></div>
+      <div class="card"><h2 class="sec">半径</h2><div id="s-radius"></div></div>
+      <div class="card">
+        <div class="row-between"><h2 class="sec">件数</h2><div id="s-count"></div></div>
+      </div>
+      <div class="card"><h2 class="sec">訪問する日</h2><div id="s-date"></div></div>
+      <div class="card"><h2 class="sec">業種</h2><div id="s-ind"></div></div>
+      <div class="card"><h2 class="sec">お気に入り条件</h2><div id="s-presets"></div></div>
+      <div class="card"><button class="btn wide" data-act="block-list" id="blockBtn">訪問NGの店</button></div>
+
+      <div class="dock"><button class="btn primary wide" data-act="run-search">提案リストを作る</button></div>
+    </section>
+
+    <!-- 提案リスト -->
+    <section class="screen" data-screen="proposal" aria-label="提案リスト">
+      <header class="page-head">
+        <h1>提案リスト</h1>
+        <p class="summary" id="pSummary"></p>
+      </header>
+      <div class="seg" id="pSort" role="tablist"></div>
+      <div class="card"><h2 class="sec">業種で絞り込み</h2><div class="chips" id="pInd"></div></div>
+      <div class="card row-between">
+        <span id="pOpenLabel"></span>
+        <button class="switch" id="pOpen" role="switch" data-act="open-only" aria-checked="true"></button>
+      </div>
+      <div class="list-head">
+        <h2>提案リスト</h2>
+        <p class="sub">サイトなし・チェーン店除外済み</p>
+      </div>
+      <div id="pList"></div>
+      <div class="dock two">
+        <button class="btn" data-act="go-search">条件を変えてもう一度</button>
+        <button class="btn primary" data-act="go-list">訪問リストを見る</button>
+      </div>
+    </section>
+
+    <!-- 訪問リスト -->
+    <section class="screen" data-screen="list" aria-label="訪問リスト">
+      <header class="page-head">
+        <h1>訪問リスト</h1>
+        <div class="head-actions">
+          <button class="btn small" data-act="copy-all" data-src="visit">全部のリンクをコピー</button>
+          <a class="btn small" href="https://kanryohkk-app.pages.dev" target="_blank" rel="noopener">完了報告アプリへ</a>
+        </div>
+      </header>
+      <div class="row-between list-tools">
+        <span class="sub" id="lCount"></span>
+        <button class="btn small" data-act="sort-dist">近い順に並べ替え</button>
+      </div>
+      <div id="lList"></div>
+    </section>
+
+    <!-- 後で訪問 -->
+    <section class="screen" data-screen="later" aria-label="後で訪問">
+      <header class="page-head">
+        <h1>後で訪問</h1>
+        <div class="head-actions">
+          <button class="btn small" data-act="copy-all" data-src="later">全部のリンクをコピー</button>
+        </div>
+      </header>
+      <div class="row-between list-tools"><span class="sub" id="gCount"></span></div>
+      <div id="gList"></div>
+    </section>
+
+  </main>
+
+  <nav class="tabs" id="nav" aria-label="メニュー"></nav>
+  <div id="sheet" class="sheet-root" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="/data.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+  </script>
+</body>
+</html>
