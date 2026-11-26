@@ -71,8 +71,8 @@
   const CRIT = {
     rating: '4.5以上＝5点／4.0以上＝4点／3.5以上＝3点／3.0以上＝2点／それ未満＝1点',
     reviews: '200件以上＝5点／100件以上＝4点／50件以上＝3点／10件以上＝2点／9件以下＝1点',
-    fresh: '開業2年以内＝5点／5年以内＝4点／10年以内＝3点／20年以内＝2点／それ以上＝1点',
-    fit: '従業員5名以下＝5点／10名以下＝4点／30名以下＝3点／それ以上＝2点',
+    fresh: '開業2年以内＝5点／5年以内＝4点／10年以内＝3点／20年以内＝2点／それ以上＝1点。開業年が分からない店は3点（中立）',
+    fit: '従業員5名以下＝5点／10名以下＝4点／30名以下＝3点／それ以上＝2点。従業員数が分からない店は3点（中立）',
   };
   const WHY = {
     rating: '口コミ評価が高く、店の信頼が見込める',
@@ -86,16 +86,17 @@
     return {
       rating: s.rating >= 4.5 ? 5 : s.rating >= 4 ? 4 : s.rating >= 3.5 ? 3 : s.rating >= 3 ? 2 : 1,
       reviews: s.reviews >= 200 ? 5 : s.reviews >= 100 ? 4 : s.reviews >= 50 ? 3 : s.reviews >= 10 ? 2 : 1,
-      fresh: age <= 2 ? 5 : age <= 5 ? 4 : age <= 10 ? 3 : age <= 20 ? 2 : 1,
-      fit: s.staff <= 5 ? 5 : s.staff <= 10 ? 4 : s.staff <= 30 ? 3 : 2,
+      // 開業年・従業員数は Google Places に無いので、分からない店は3点（中立）
+      fresh: s.opened == null ? 3 : age <= 2 ? 5 : age <= 5 ? 4 : age <= 10 ? 3 : age <= 20 ? 2 : 1,
+      fit: s.staff == null ? 3 : s.staff <= 5 ? 5 : s.staff <= 10 ? 4 : s.staff <= 30 ? 3 : 2,
     };
   }
 
   function evidence(s, k) {
     if (k === 'rating') return `評価 ${s.rating}（5点満点）`;
     if (k === 'reviews') return `口コミ ${s.reviews}件`;
-    if (k === 'fresh') return `開業 ${s.opened}年（${NOW_YEAR - s.opened}年目）`;
-    return `従業員 ${s.staff}名`;
+    if (k === 'fresh') return s.opened == null ? '開業年は未取得' : `開業 ${s.opened}年（${NOW_YEAR - s.opened}年目）`;
+    return s.staff == null ? '従業員数は未取得' : `従業員 ${s.staff}名`;
   }
 
   function reasonText(s, k) {
@@ -109,7 +110,9 @@
     const sub = subScores(s);
     const total5 = KEYS.reduce((a, k) => a + sub[k] * W[k], 0);
     const overall = Math.round(total5 * 2 * 10) / 10;
-    const top = KEYS.slice().sort((a, b) => sub[b] - sub[a]).slice(0, 3);
+    // 理由は、データがある項目から選ぶ（未取得の項目は理由にしない）
+    const known = KEYS.filter((k) => !(k === 'fresh' && s.opened == null) && !(k === 'fit' && s.staff == null));
+    const top = known.slice().sort((a, b) => sub[b] - sub[a]).slice(0, 3);
     return { ...s, sub, total5, overall, reasons: top.map((k) => reasonText(s, k)) };
   }
 
@@ -456,21 +459,23 @@
   // ---------- 検索の実行 ----------
   async function runSearch() {
     const a = state.area;
-    let center;
-    if (a.mode === 'address') {
-      const text = a.address.trim();
-      if (!text) return toast('住所か町名を入力してください');
-      center = await D.geocode(text);
-      if (!center) return toast('場所が見つかりませんでした');
-    } else {
-      if (a.lat == null) return toast('先に現在地を取得してください');
-      center = { lat: a.lat, lng: a.lng };
-    }
-    const radiusM = RADIUS.find((r) => r[0] === state.radius)[2];
+    let center, viewport = null;
     const btn = $('[data-act="run-search"]');
     btn.disabled = true; btn.textContent = '探しています…';
     try {
-      const raw = await D.searchShops({ center, radius: radiusM, date: state.date });
+      if (a.mode === 'address') {
+        const text = a.address.trim();
+        if (!text) return toast('住所か町名を入力してください');
+        center = await D.geocode(text);
+        if (!center) return toast('場所が見つかりませんでした');
+        viewport = center.viewport || null;
+      } else {
+        if (a.lat == null) return toast('先に現在地を取得してください');
+        center = { lat: a.lat, lng: a.lng };
+      }
+      const town = state.radius === 'town';
+      const radiusM = RADIUS.find((r) => r[0] === state.radius)[2];
+      const raw = await D.searchShops({ center, radius: radiusM, town, viewport: town ? viewport : null, industries: [...state.industries] });
       const blocked = new Set(state.blocks.map((b) => b.id));
       state.pool = raw.filter((s) => !blocked.has(s.id)).map(withScores);
       state.snap = {
@@ -484,7 +489,7 @@
       state.expanded = new Set();
       go('proposal');
     } catch (e) {
-      toast('取得に失敗しました。時間をおいてもう一度お試しください');
+      toast(e && e.message ? e.message : '取得に失敗しました。時間をおいてもう一度お試しください');
     } finally {
       btn.disabled = false; btn.textContent = '提案リストを作る';
     }

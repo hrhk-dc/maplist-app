@@ -1,7 +1,7 @@
 // 訪問リストアプリ：サービスワーカー
 // 画面のファイルは「ネット優先・つながらない時だけ保存版」を使う
 // 店の候補データ（API）は保存しない
-const CACHE = "visit-list-v1";
+const CACHE = "visit-list-v2";
 const SHELL = ["/", "/index.html", "/style.css", "/app.js", "/data.js", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
