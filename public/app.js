@@ -263,6 +263,13 @@
       return `<button class="htab${i === state.indTab ? ' on' : ''}" data-act="ind-tab" data-i="${i}">${esc(gr.name)}${c ? `<span class="cnt">${c}</span>` : ''}</button>`;
     }).join('');
     const all = g.items.every((n) => state.industries.has(n));
+    // 「全て」：33業種すべてが選ばれていれば「解除」に切り替える
+    const everyIndustry = D.GROUPS.every((gr) => gr.items.every((n) => state.industries.has(n)));
+    const allBtn = $('#allInd');
+    if (allBtn) {
+      allBtn.textContent = everyIndustry ? '解除' : '全て';
+      allBtn.classList.toggle('on', everyIndustry);
+    }
     $('#s-ind').innerHTML = `
       <div class="htabs" role="tablist">${tabs}</div>
       <div class="ind-head"><span class="sub">${esc(g.name)}（${g.items.length}業種）</span>
@@ -448,13 +455,19 @@
   }
 
   // ログインの状態を読み直す（未ログインなら一覧は空・候補も消す）
+  // 後から始めた読み直しを優先する（古い結果が新しいログイン結果を上書きしない）
+  let userSeq = 0;
   async function refreshUser() {
+    const mine = ++userSeq;
+    let user = null;
     try {
       const u = await D.currentUser();
-      state.user = u ? { name: u.displayName || u.email || 'ログイン中' } : null;
+      user = u ? { name: u.displayName || u.email || 'ログイン中' } : null;
     } catch (e) {
-      state.user = null;
+      user = null;
     }
+    if (mine !== userSeq) return; // より新しい読み直しがあれば、この結果は捨てる
+    state.user = user;
     state.blocks = state.user ? await D.getBlocks() : [];
     if (!state.user) { state.pool = []; state.snap = null; }
     renderAll();
@@ -730,6 +743,12 @@
     'search-date': (el) => { state.date = el.dataset.date; renderDate(); },
     'ind-tab': (el) => { state.indTab = Number(el.dataset.i); renderInd(); },
     ind: (el) => { const n = el.dataset.name; state.industries.has(n) ? state.industries.delete(n) : state.industries.add(n); renderInd(); },
+    'ind-all': () => {
+      const everyIndustry = D.GROUPS.every((gr) => gr.items.every((n) => state.industries.has(n)));
+      state.industries.clear();
+      if (!everyIndustry) D.GROUPS.forEach((gr) => gr.items.forEach((n) => state.industries.add(n)));
+      renderInd();
+    },
     'ind-group': () => {
       const g = D.GROUPS[state.indTab].items;
       const all = g.every((n) => state.industries.has(n));

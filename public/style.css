@@ -271,3 +271,7 @@ button:disabled { opacity: .45; cursor: default; }
 .acct-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
 
 @media (min-width: 560px) { .dock { max-width: 560px; margin: 0 auto; left: 0; right: 0; } }
+
+/* 業種の見出し行（右に「全て」ボタン） */
+.sec-row { margin-bottom: 10px; }
+.sec-row .sec { margin: 0; }
