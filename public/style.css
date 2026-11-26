@@ -277,6 +277,22 @@ button:disabled { opacity: .45; cursor: default; }
 
 @media (min-width: 560px) { .dock { max-width: 560px; margin: 0 auto; left: 0; right: 0; } }
 
+/* 点数の内訳：開いている項目は、虹色の縁を2pxにして一目で分かるようにする。押すと少し縮む */
+.score, .overall { transition: transform .12s, border-width .15s, box-shadow .2s; }
+.score.open, .overall.open {
+  border-width: 2px;
+  box-shadow: 0 0 14px rgba(0, 229, 255, .2), 0 0 14px rgba(255, 46, 136, .16), 0 6px 14px rgba(0, 0, 0, .35);
+}
+.score:active, .overall:active { transform: scale(.93); }
+.detail { animation: rise .2s ease-out; }
+
+/* 下のタブ：下にスクロールするとゆっくり隠れ、上にスクロールするとゆっくり出る */
+.tabs { transition: opacity .45s ease-out, transform .45s ease-out; }
+.tabs.hide { opacity: 0; transform: translateY(16px); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tabs, .detail, .score, .overall { transition: none; animation: none; }
+}
+
 /* 下の二つ並びのボタンは、文字が一行に収まるように少し詰める */
 .dock.two .btn { font-size: 13px; padding: 0 10px; white-space: nowrap; }
 
